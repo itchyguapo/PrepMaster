@@ -19,13 +19,15 @@ import { useToast } from "@/hooks/use-toast";
 export default function SystemSettings() {
   const { toast } = useToast();
   const [subjects, setSubjects] = useState([
-    { id: 1, name: "Mathematics", type: "Both", active: true },
-    { id: 2, name: "English Language", type: "Both", active: true },
-    { id: 3, name: "Physics", type: "Both", active: true },
-    { id: 4, name: "Chemistry", type: "Both", active: true },
-    { id: 5, name: "Biology", type: "Both", active: true },
-    { id: 6, name: "Civic Education", type: "WAEC", active: true },
+    { id: 1, name: "Mathematics", type: "All Exams", active: true },
+    { id: 2, name: "English Language", type: "All Exams", active: true },
+    { id: 3, name: "Physics", type: "All Exams", active: true },
+    { id: 4, name: "Chemistry", type: "All Exams", active: true },
+    { id: 5, name: "Biology", type: "All Exams", active: true },
+    { id: 6, name: "Civic Education", type: "WAEC/NECO", active: true },
     { id: 7, name: "Use of English", type: "JAMB", active: true },
+    { id: 8, name: "Further Mathematics", type: "WAEC/NECO", active: true },
+    { id: 9, name: "Economics", type: "All Exams", active: true },
   ]);
 
   const toggleSubject = (id: number) => {
@@ -60,7 +62,7 @@ export default function SystemSettings() {
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle>Subject Management</CardTitle>
-                    <CardDescription>Manage active subjects for WAEC and JAMB.</CardDescription>
+                    <CardDescription>Manage active subjects for WAEC, NECO, and JAMB.</CardDescription>
                   </div>
                   <Button size="sm">
                     <Plus className="mr-2 h-4 w-4" /> Add Subject

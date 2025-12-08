@@ -14,7 +14,9 @@ import {
   X,
   Loader2,
   AlertCircle,
-  FileCheck
+  FileCheck,
+  BookOpen,
+  LayoutGrid
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +41,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 const initialQuestions = [
   { id: 1, q: "Calculate the value of x if 2x + 5 = 15", exam: "WAEC", subject: "Math", topic: "Algebra", status: "Active" },
@@ -46,6 +54,8 @@ const initialQuestions = [
   { id: 3, q: "The narrative technique used in the passage...", exam: "JAMB", subject: "Literature", topic: "Literary Devices", status: "Active" },
   { id: 4, q: "Identify the figure of speech in 'The wind whispered'", exam: "WAEC", subject: "English", topic: "Figurative Expr.", status: "Active" },
   { id: 5, q: "In a market economy, price is determined by...", exam: "WAEC", subject: "Economics", topic: "Price Mechanism", status: "Draft" },
+  { id: 6, q: "Who was the first Prime Minister of Nigeria?", exam: "NECO", subject: "Civic Education", topic: "History", status: "Active" },
+  { id: 7, q: "Define the term 'Osmosis'...", exam: "NECO", subject: "Biology", topic: "Cell Biology", status: "Review" },
 ];
 
 export default function QuestionBank() {
@@ -59,7 +69,8 @@ export default function QuestionBank() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
   // Import Flow States
-  const [importStep, setImportStep] = useState<"upload" | "processing" | "preview">("upload");
+  const [importStep, setImportStep] = useState<"select_exam" | "upload" | "processing" | "preview">("select_exam");
+  const [selectedExamType, setSelectedExamType] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingProgress, setProcessingProgress] = useState(0);
@@ -115,12 +126,25 @@ export default function QuestionBank() {
     return matchesSearch && matchesExam;
   });
 
+  // Grouping Logic
+  const groupedQuestions = filteredQuestions.reduce((acc, q) => {
+    const key = `${q.exam} - ${q.subject}`;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(q);
+    return acc;
+  }, {} as Record<string, typeof questions>);
+
   // --- Bulk Import Logic ---
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
     }
+  };
+
+  const handleSelectExamForImport = (exam: string) => {
+    setSelectedExamType(exam);
+    setImportStep("upload");
   };
 
   const startUpload = () => {
@@ -147,11 +171,11 @@ export default function QuestionBank() {
       setProcessingProgress(proc);
       if (proc >= 100) {
         clearInterval(processInterval);
-        // Generate Mock Preview Data based on filename or just random
+        // Generate Mock Preview Data based on exam type
         const mockExtracted = [
-          { id: 101, q: "What is the capital of Nigeria?", exam: "JAMB", subject: "Civic Education", topic: "Government", status: "Review" },
-          { id: 102, q: "Solve for x: 3x - 9 = 0", exam: "WAEC", subject: "Mathematics", topic: "Algebra", status: "Review" },
-          { id: 103, q: "The powerhouse of the cell is...", exam: "JAMB", subject: "Biology", topic: "Cell Biology", status: "Review" },
+          { id: 101, q: `Sample ${selectedExamType} Question 1...`, exam: selectedExamType, subject: "General", topic: "Introductory Concepts", status: "Review" },
+          { id: 102, q: `Another ${selectedExamType} Question...`, exam: selectedExamType, subject: "General", topic: "Advanced Theory", status: "Review" },
+          { id: 103, q: "Complex scenario based question...", exam: selectedExamType, subject: "General", topic: "Practical Application", status: "Review" },
         ];
         setPreviewQuestions(mockExtracted);
         setImportStep("preview");
@@ -160,12 +184,10 @@ export default function QuestionBank() {
   };
 
   const confirmImport = () => {
-    // Merge preview questions into main list
-    // In a real app, IDs would be handled by backend
     const newQs = previewQuestions.map((q, idx) => ({
       ...q,
-      id: Date.now() + idx, // temporary unique ID
-      status: "Active" // Auto-approve for demo or keep as Review
+      id: Date.now() + idx, 
+      status: "Active" 
     }));
     
     setQuestions([...newQs, ...questions]);
@@ -173,12 +195,13 @@ export default function QuestionBank() {
     resetImport();
     toast({
       title: "Import Successful",
-      description: `Successfully imported ${newQs.length} questions.`,
+      description: `Successfully imported ${newQs.length} questions for ${selectedExamType}.`,
     });
   };
 
   const resetImport = () => {
-    setImportStep("upload");
+    setImportStep("select_exam");
+    setSelectedExamType("");
     setSelectedFile(null);
     setUploadProgress(0);
     setProcessingProgress(0);
@@ -213,12 +236,36 @@ export default function QuestionBank() {
                 <DialogHeader>
                   <DialogTitle>Bulk Import Questions</DialogTitle>
                   <DialogDescription>
-                    Upload exam papers (PDF, DOCX) to automatically extract questions.
+                    Upload exam papers to automatically extract questions and sort by topic.
                   </DialogDescription>
                 </DialogHeader>
 
-                {importStep === "upload" && (
+                {importStep === "select_exam" && (
                   <div className="grid gap-4 py-8">
+                    <Label className="text-center text-lg">Select Exam Body</Label>
+                    <div className="grid grid-cols-3 gap-4">
+                      {["WAEC", "NECO", "JAMB"].map((exam) => (
+                        <div 
+                          key={exam}
+                          className="border rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 hover:border-primary transition-all group"
+                          onClick={() => handleSelectExamForImport(exam)}
+                        >
+                          <BookOpen className="h-8 w-8 mb-2 text-muted-foreground group-hover:text-primary" />
+                          <span className="font-bold">{exam}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {importStep === "upload" && (
+                  <div className="grid gap-4 py-8 animate-in fade-in slide-in-from-right-4">
+                    <div className="flex items-center gap-2 mb-2">
+                       <Badge variant="outline" className="text-primary border-primary/20 bg-primary/5">
+                         Importing for {selectedExamType}
+                       </Badge>
+                       <Button variant="ghost" size="sm" className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground" onClick={() => setImportStep("select_exam")}>Change</Button>
+                    </div>
                     <div 
                       className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-12 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-muted/50 transition-colors"
                       onClick={() => fileInputRef.current?.click()}
@@ -244,7 +291,7 @@ export default function QuestionBank() {
                 )}
 
                 {importStep === "processing" && (
-                  <div className="py-8 space-y-6">
+                  <div className="py-8 space-y-6 animate-in fade-in slide-in-from-right-4">
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
                         <span>Uploading file...</span>
@@ -258,7 +305,7 @@ export default function QuestionBank() {
                          <div className="flex justify-between text-sm">
                           <span className="flex items-center gap-2">
                             <Loader2 className="h-3 w-3 animate-spin" /> 
-                            AI Analyzing & Extracting...
+                            AI Sorting Subjects & Topics...
                           </span>
                           <span>{processingProgress}%</span>
                         </div>
@@ -269,17 +316,17 @@ export default function QuestionBank() {
                 )}
 
                 {importStep === "preview" && (
-                  <div className="py-4">
+                  <div className="py-4 animate-in fade-in slide-in-from-right-4">
                     <div className="flex items-center gap-2 mb-4 p-3 bg-green-50 text-green-700 rounded-md text-sm border border-green-200">
                       <FileCheck className="h-4 w-4" />
-                      <span>Successfully extracted {previewQuestions.length} questions from <b>{selectedFile?.name}</b></span>
+                      <span>Successfully extracted {previewQuestions.length} questions for <b>{selectedExamType}</b></span>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto border rounded-md">
                       <table className="w-full text-sm">
                         <thead className="bg-muted sticky top-0">
                           <tr>
                             <th className="p-2 text-left">Question Preview</th>
-                            <th className="p-2 text-left">Detected Topic</th>
+                            <th className="p-2 text-left">AI Detected Topic</th>
                             <th className="p-2 w-[50px]"></th>
                           </tr>
                         </thead>
@@ -288,7 +335,7 @@ export default function QuestionBank() {
                             <tr key={q.id} className="border-b last:border-0">
                               <td className="p-2 align-top">{q.q}</td>
                               <td className="p-2 align-top">
-                                <Badge variant="outline">{q.topic}</Badge>
+                                <Badge variant="outline" className="bg-primary/5 border-primary/20 text-primary">{q.topic}</Badge>
                               </td>
                               <td className="p-2 align-top text-right">
                                 <Button 
@@ -354,6 +401,7 @@ export default function QuestionBank() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="WAEC">WAEC</SelectItem>
+                          <SelectItem value="NECO">NECO</SelectItem>
                           <SelectItem value="JAMB">JAMB</SelectItem>
                         </SelectContent>
                       </Select>
@@ -372,6 +420,8 @@ export default function QuestionBank() {
                           <SelectItem value="English">English</SelectItem>
                           <SelectItem value="Physics">Physics</SelectItem>
                           <SelectItem value="Chemistry">Chemistry</SelectItem>
+                          <SelectItem value="Civic Education">Civic Education</SelectItem>
+                          <SelectItem value="Biology">Biology</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -440,108 +490,113 @@ export default function QuestionBank() {
           </CardContent>
         </Card>
 
-        {/* Question List */}
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row gap-4 justify-between">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search questions..." 
-                  className="pl-9" 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="icon">
-                  <Filter className="h-4 w-4" />
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline">
-                      {filterExam ? filterExam : "Filter by Exam"}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => setFilterExam(null)}>All Exams</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setFilterExam("WAEC")}>WAEC</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setFilterExam("JAMB")}>JAMB</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+        {/* Question List Grouped by Exam/Subject */}
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row gap-4 justify-between">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search questions across all banks..." 
+                className="pl-9 bg-background" 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-md border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50 transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Question</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Exam/Subject</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Topic</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Status</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredQuestions.map((row) => (
-                    <tr key={row.id} className="border-b transition-colors hover:bg-muted/50">
-                      <td className="p-4 align-middle font-medium max-w-[300px] truncate">{row.q}</td>
-                      <td className="p-4 align-middle">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-xs">{row.exam}</span>
-                          <span className="text-muted-foreground">{row.subject}</span>
-                        </div>
-                      </td>
-                      <td className="p-4 align-middle">
-                        <Badge variant="secondary" className="font-normal">{row.topic}</Badge>
-                      </td>
-                      <td className="p-4 align-middle">
-                        <Badge variant={row.status === 'Active' ? 'default' : 'outline'} className={row.status === 'Review' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200' : ''}>
-                          {row.status}
-                        </Badge>
-                      </td>
-                      <td className="p-4 align-middle">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
-                              <Edit className="mr-2 h-4 w-4" /> Edit
-                            </DropdownMenuItem>
-                            {row.status === 'Review' ? (
-                              <DropdownMenuItem className="text-green-600" onClick={() => handleStatusChange(row.id, 'Active')}>
-                                <Check className="mr-2 h-4 w-4" /> Approve
-                              </DropdownMenuItem>
-                            ) : null}
-                            <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(row.id)}>
-                              <Trash2 className="mr-2 h-4 w-4" /> Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredQuestions.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                        No questions found matching your criteria.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="flex gap-2">
+              <Button variant="outline" size="icon">
+                <Filter className="h-4 w-4" />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
+                    {filterExam ? filterExam : "Filter by Exam"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => setFilterExam(null)}>All Exams</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setFilterExam("WAEC")}>WAEC</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setFilterExam("NECO")}>NECO</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setFilterExam("JAMB")}>JAMB</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <div className="flex items-center justify-end space-x-2 py-4">
-              <Button variant="outline" size="sm">Previous</Button>
-              <Button variant="outline" size="sm">Next</Button>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+
+          {Object.entries(groupedQuestions).length === 0 ? (
+             <Card>
+               <CardContent className="p-8 text-center text-muted-foreground">
+                 No questions found matching your criteria.
+               </CardContent>
+             </Card>
+          ) : (
+            <Accordion type="multiple" defaultValue={Object.keys(groupedQuestions)} className="space-y-4">
+              {Object.entries(groupedQuestions).map(([groupTitle, groupItems]) => (
+                <AccordionItem key={groupTitle} value={groupTitle} className="border border-border rounded-lg bg-card px-4">
+                  <AccordionTrigger className="hover:no-underline py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-primary/10 p-2 rounded text-primary">
+                        <LayoutGrid className="h-4 w-4" />
+                      </div>
+                      <span className="font-bold text-lg">{groupTitle}</span>
+                      <Badge variant="secondary" className="ml-2">{groupItems.length} Questions</Badge>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-4 pt-2">
+                     <div className="rounded-md border">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50">
+                          <tr>
+                            <th className="h-10 px-4 text-left font-medium text-muted-foreground">Question</th>
+                            <th className="h-10 px-4 text-left font-medium text-muted-foreground">Topic</th>
+                            <th className="h-10 px-4 text-left font-medium text-muted-foreground">Status</th>
+                            <th className="h-10 px-4 text-right font-medium text-muted-foreground">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {groupItems.map((row) => (
+                            <tr key={row.id} className="border-b last:border-0 hover:bg-muted/50">
+                              <td className="p-4 font-medium max-w-[400px] truncate">{row.q}</td>
+                              <td className="p-4">
+                                <Badge variant="outline" className="font-normal">{row.topic}</Badge>
+                              </td>
+                              <td className="p-4">
+                                <Badge variant={row.status === 'Active' ? 'default' : 'outline'} className={row.status === 'Review' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200' : ''}>
+                                  {row.status}
+                                </Badge>
+                              </td>
+                              <td className="p-4 text-right">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem>
+                                      <Edit className="mr-2 h-4 w-4" /> Edit
+                                    </DropdownMenuItem>
+                                    {row.status === 'Review' ? (
+                                      <DropdownMenuItem className="text-green-600" onClick={() => handleStatusChange(row.id, 'Active')}>
+                                        <Check className="mr-2 h-4 w-4" /> Approve
+                                      </DropdownMenuItem>
+                                    ) : null}
+                                    <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(row.id)}>
+                                      <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          )}
+        </div>
       </div>
     </AdminLayout>
   );
