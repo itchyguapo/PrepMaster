@@ -13,10 +13,11 @@ import {
   Check,
   X,
   Loader2,
-  AlertCircle,
   FileCheck,
   BookOpen,
-  LayoutGrid
+  LayoutGrid,
+  ChevronRight,
+  ArrowLeft
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -41,36 +42,40 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 
 const initialQuestions = [
-  { id: 1, q: "Calculate the value of x if 2x + 5 = 15", exam: "WAEC", subject: "Math", topic: "Algebra", status: "Active" },
+  { id: 1, q: "Calculate the value of x if 2x + 5 = 15", exam: "WAEC", subject: "Mathematics", topic: "Algebra", status: "Active" },
   { id: 2, q: "Which of the following is a noble gas?", exam: "JAMB", subject: "Chemistry", topic: "Periodic Table", status: "Review" },
   { id: 3, q: "The narrative technique used in the passage...", exam: "JAMB", subject: "Literature", topic: "Literary Devices", status: "Active" },
   { id: 4, q: "Identify the figure of speech in 'The wind whispered'", exam: "WAEC", subject: "English", topic: "Figurative Expr.", status: "Active" },
   { id: 5, q: "In a market economy, price is determined by...", exam: "WAEC", subject: "Economics", topic: "Price Mechanism", status: "Draft" },
   { id: 6, q: "Who was the first Prime Minister of Nigeria?", exam: "NECO", subject: "Civic Education", topic: "History", status: "Active" },
   { id: 7, q: "Define the term 'Osmosis'...", exam: "NECO", subject: "Biology", topic: "Cell Biology", status: "Review" },
+  { id: 8, q: "Find the derivative of sin(x)", exam: "WAEC", subject: "Mathematics", topic: "Calculus", status: "Active" },
+  { id: 9, q: "What is the atomic number of Carbon?", exam: "WAEC", subject: "Chemistry", topic: "Atomic Structure", status: "Active" },
+];
+
+const subjectsList = [
+  "Mathematics", "English", "Physics", "Chemistry", "Biology", "Economics", "Literature", "Government", "Civic Education"
 ];
 
 export default function QuestionBank() {
   const [questions, setQuestions] = useState(initialQuestions);
-  const [filterExam, setFilterExam] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
   
+  // Navigation State
+  const [viewState, setViewState] = useState<"categories" | "subjects" | "questions">("categories");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+
   // Dialog States
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
   // Import Flow States
-  const [importStep, setImportStep] = useState<"select_exam" | "upload" | "processing" | "preview">("select_exam");
-  const [selectedExamType, setSelectedExamType] = useState<string>("");
+  const [importStep, setImportStep] = useState<"select_exam" | "select_subject" | "upload" | "processing" | "preview">("select_exam");
+  const [importExamType, setImportExamType] = useState<string>("");
+  const [importSubject, setImportSubject] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingProgress, setProcessingProgress] = useState(0);
@@ -80,23 +85,45 @@ export default function QuestionBank() {
   // Mock Form State
   const [newQuestion, setNewQuestion] = useState({
     text: "",
-    exam: "WAEC",
-    subject: "Mathematics",
     topic: ""
   });
 
+  // --- Navigation Logic ---
+  const handleCategorySelect = (category: string) => {
+    setSelectedCategory(category);
+    setViewState("subjects");
+  };
+
+  const handleSubjectSelect = (subject: string) => {
+    setSelectedSubject(subject);
+    setViewState("questions");
+  };
+
+  const handleBack = () => {
+    if (viewState === "questions") {
+      setViewState("subjects");
+      setSelectedSubject(null);
+    } else if (viewState === "subjects") {
+      setViewState("categories");
+      setSelectedCategory(null);
+    }
+  };
+
+  // --- CRUD Operations ---
   const handleAddQuestion = () => {
+    if (!selectedCategory || !selectedSubject) return;
+
     const q = {
       id: questions.length + 1,
       q: newQuestion.text,
-      exam: newQuestion.exam,
-      subject: newQuestion.subject,
+      exam: selectedCategory,
+      subject: selectedSubject,
       topic: newQuestion.topic || "General",
       status: "Active"
     };
     setQuestions([q, ...questions]);
     setIsAddDialogOpen(false);
-    setNewQuestion({ text: "", exam: "WAEC", subject: "Mathematics", topic: "" });
+    setNewQuestion({ text: "", topic: "" });
     toast({
       title: "Question Added",
       description: "New question has been successfully added to the bank.",
@@ -120,22 +147,11 @@ export default function QuestionBank() {
     });
   };
 
-  const filteredQuestions = questions.filter(q => {
-    const matchesSearch = q.q.toLowerCase().includes(searchTerm.toLowerCase()) || q.topic.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesExam = filterExam ? q.exam === filterExam : true;
-    return matchesSearch && matchesExam;
-  });
-
-  // Grouping Logic
-  const groupedQuestions = filteredQuestions.reduce((acc, q) => {
-    const key = `${q.exam} - ${q.subject}`;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(q);
-    return acc;
-  }, {} as Record<string, typeof questions>);
+  const filteredQuestions = questions.filter(q => 
+    q.exam === selectedCategory && q.subject === selectedSubject
+  );
 
   // --- Bulk Import Logic ---
-
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
@@ -143,7 +159,12 @@ export default function QuestionBank() {
   };
 
   const handleSelectExamForImport = (exam: string) => {
-    setSelectedExamType(exam);
+    setImportExamType(exam);
+    setImportStep("select_subject");
+  };
+
+  const handleSelectSubjectForImport = (subject: string) => {
+    setImportSubject(subject);
     setImportStep("upload");
   };
 
@@ -158,7 +179,6 @@ export default function QuestionBank() {
       setUploadProgress(up);
       if (up >= 100) {
         clearInterval(uploadInterval);
-        // Start Processing simulation
         startProcessing();
       }
     }, 200);
@@ -171,11 +191,11 @@ export default function QuestionBank() {
       setProcessingProgress(proc);
       if (proc >= 100) {
         clearInterval(processInterval);
-        // Generate Mock Preview Data based on exam type
+        // Generate Mock Preview Data based on exam type and subject
         const mockExtracted = [
-          { id: 101, q: `Sample ${selectedExamType} Question 1...`, exam: selectedExamType, subject: "General", topic: "Introductory Concepts", status: "Review" },
-          { id: 102, q: `Another ${selectedExamType} Question...`, exam: selectedExamType, subject: "General", topic: "Advanced Theory", status: "Review" },
-          { id: 103, q: "Complex scenario based question...", exam: selectedExamType, subject: "General", topic: "Practical Application", status: "Review" },
+          { id: 101, q: `Sample ${importExamType} ${importSubject} Question 1...`, exam: importExamType, subject: importSubject, topic: "Introductory Concepts", status: "Review" },
+          { id: 102, q: `Another ${importExamType} Question...`, exam: importExamType, subject: importSubject, topic: "Advanced Theory", status: "Review" },
+          { id: 103, q: "Complex scenario based question...", exam: importExamType, subject: importSubject, topic: "Practical Application", status: "Review" },
         ];
         setPreviewQuestions(mockExtracted);
         setImportStep("preview");
@@ -195,13 +215,14 @@ export default function QuestionBank() {
     resetImport();
     toast({
       title: "Import Successful",
-      description: `Successfully imported ${newQs.length} questions for ${selectedExamType}.`,
+      description: `Successfully imported ${newQs.length} questions for ${importExamType} - ${importSubject}.`,
     });
   };
 
   const resetImport = () => {
     setImportStep("select_exam");
-    setSelectedExamType("");
+    setImportExamType("");
+    setImportSubject("");
     setSelectedFile(null);
     setUploadProgress(0);
     setProcessingProgress(0);
@@ -219,9 +240,19 @@ export default function QuestionBank() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold font-display">Question Bank</h1>
-            <p className="text-muted-foreground">Manage and expand the repository of exam questions.</p>
+            <p className="text-muted-foreground">
+              {viewState === "categories" && "Select an exam category to manage."}
+              {viewState === "subjects" && `Select a subject for ${selectedCategory}.`}
+              {viewState === "questions" && `Managing ${selectedCategory} - ${selectedSubject} questions.`}
+            </p>
           </div>
           <div className="flex gap-3">
+             {viewState !== "categories" && (
+                <Button variant="outline" onClick={handleBack}>
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                </Button>
+             )}
+
             {/* Bulk Import Dialog */}
             <Dialog open={isImportDialogOpen} onOpenChange={(open) => {
               setIsImportDialogOpen(open);
@@ -229,20 +260,20 @@ export default function QuestionBank() {
             }}>
               <DialogTrigger asChild>
                 <Button variant="outline">
-                  <Upload className="mr-2 h-4 w-4" /> Bulk Import (PDF/Docx)
+                  <Upload className="mr-2 h-4 w-4" /> Bulk Import
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader>
                   <DialogTitle>Bulk Import Questions</DialogTitle>
                   <DialogDescription>
-                    Upload exam papers to automatically extract questions and sort by topic.
+                    Follow the steps to upload and classify new questions.
                   </DialogDescription>
                 </DialogHeader>
 
                 {importStep === "select_exam" && (
                   <div className="grid gap-4 py-8">
-                    <Label className="text-center text-lg">Select Exam Body</Label>
+                    <Label className="text-center text-lg">Step 1: Select Exam Body</Label>
                     <div className="grid grid-cols-3 gap-4">
                       {["WAEC", "NECO", "JAMB"].map((exam) => (
                         <div 
@@ -258,13 +289,32 @@ export default function QuestionBank() {
                   </div>
                 )}
 
+                {importStep === "select_subject" && (
+                  <div className="grid gap-4 py-8">
+                    <Label className="text-center text-lg">Step 2: Select Subject for {importExamType}</Label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto p-1">
+                      {subjectsList.map((subject) => (
+                        <Button 
+                          key={subject} 
+                          variant="outline" 
+                          className="justify-start h-auto py-3 px-4"
+                          onClick={() => handleSelectSubjectForImport(subject)}
+                        >
+                          {subject}
+                        </Button>
+                      ))}
+                    </div>
+                    <Button variant="ghost" onClick={() => setImportStep("select_exam")}>Back to Exam Selection</Button>
+                  </div>
+                )}
+
                 {importStep === "upload" && (
                   <div className="grid gap-4 py-8 animate-in fade-in slide-in-from-right-4">
-                    <div className="flex items-center gap-2 mb-2">
-                       <Badge variant="outline" className="text-primary border-primary/20 bg-primary/5">
-                         Importing for {selectedExamType}
+                    <div className="flex flex-col items-center gap-2 mb-4">
+                       <Badge variant="outline" className="text-primary border-primary/20 bg-primary/5 text-base px-3 py-1">
+                         Importing: {importExamType} &gt; {importSubject}
                        </Badge>
-                       <Button variant="ghost" size="sm" className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground" onClick={() => setImportStep("select_exam")}>Change</Button>
+                       <Button variant="link" size="sm" className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground" onClick={() => setImportStep("select_subject")}>Change Selection</Button>
                     </div>
                     <div 
                       className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-12 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-muted/50 transition-colors"
@@ -305,7 +355,7 @@ export default function QuestionBank() {
                          <div className="flex justify-between text-sm">
                           <span className="flex items-center gap-2">
                             <Loader2 className="h-3 w-3 animate-spin" /> 
-                            AI Sorting Subjects & Topics...
+                            AI Analyzing Topics in {importSubject}...
                           </span>
                           <span>{processingProgress}%</span>
                         </div>
@@ -319,7 +369,7 @@ export default function QuestionBank() {
                   <div className="py-4 animate-in fade-in slide-in-from-right-4">
                     <div className="flex items-center gap-2 mb-4 p-3 bg-green-50 text-green-700 rounded-md text-sm border border-green-200">
                       <FileCheck className="h-4 w-4" />
-                      <span>Successfully extracted {previewQuestions.length} questions for <b>{selectedExamType}</b></span>
+                      <span>Extracted {previewQuestions.length} questions for <b>{importExamType} - {importSubject}</b></span>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto border rounded-md">
                       <table className="w-full text-sm">
@@ -374,229 +424,174 @@ export default function QuestionBank() {
               </DialogContent>
             </Dialog>
             
-            {/* Add Manual Question Dialog */}
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-primary hover:bg-primary/90">
-                  <Plus className="mr-2 h-4 w-4" /> Add Question
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[525px]">
-                <DialogHeader>
-                  <DialogTitle>Add New Question</DialogTitle>
-                  <DialogDescription>
-                    Manually add a question to the database.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Exam Type</Label>
-                      <Select 
-                        value={newQuestion.exam} 
-                        onValueChange={(val) => setNewQuestion({...newQuestion, exam: val})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Exam" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="WAEC">WAEC</SelectItem>
-                          <SelectItem value="NECO">NECO</SelectItem>
-                          <SelectItem value="JAMB">JAMB</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Subject</Label>
-                      <Select 
-                        value={newQuestion.subject} 
-                        onValueChange={(val) => setNewQuestion({...newQuestion, subject: val})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Subject" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Mathematics">Mathematics</SelectItem>
-                          <SelectItem value="English">English</SelectItem>
-                          <SelectItem value="Physics">Physics</SelectItem>
-                          <SelectItem value="Chemistry">Chemistry</SelectItem>
-                          <SelectItem value="Civic Education">Civic Education</SelectItem>
-                          <SelectItem value="Biology">Biology</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Topic</Label>
-                    <Input 
-                      placeholder="e.g. Algebra, Organic Chemistry" 
-                      value={newQuestion.topic}
-                      onChange={(e) => setNewQuestion({...newQuestion, topic: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Question Text</Label>
-                    <Textarea 
-                      placeholder="Enter the question here..." 
-                      className="min-h-[100px]"
-                      value={newQuestion.text}
-                      onChange={(e) => setNewQuestion({...newQuestion, text: e.target.value})}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="submit" onClick={handleAddQuestion}>Save Question</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-
-        {/* AI Processing Queue (Mock) */}
-        <Card className="bg-primary/5 border-primary/20">
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2">
-                  <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-                  </span>
-                  AI Processing Pipeline
-                </CardTitle>
-                <CardDescription>
-                  System automatically processes uploaded files.
-                </CardDescription>
-              </div>
-              <Button size="sm" variant="secondary">View History</Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {/* Show recently processed items if any */}
-            <div className="space-y-3">
-               <div className="flex items-center gap-4 bg-background p-3 rounded-lg border border-border">
-                  <FileText className="h-8 w-8 text-muted-foreground" />
-                  <div className="flex-1">
-                    <div className="flex justify-between mb-1">
-                      <span className="font-medium text-sm">JAMB_English_Past_Questions.docx</span>
-                      <span className="text-xs text-green-600 font-medium">Completed</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-green-500 w-full" />
-                    </div>
-                  </div>
-                </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Question List Grouped by Exam/Subject */}
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row gap-4 justify-between">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search questions across all banks..." 
-                className="pl-9 bg-background" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="icon">
-                <Filter className="h-4 w-4" />
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline">
-                    {filterExam ? filterExam : "Filter by Exam"}
+            {/* Add Manual Question Dialog - Only visible in questions view */}
+            {viewState === "questions" && (
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-primary hover:bg-primary/90">
+                    <Plus className="mr-2 h-4 w-4" /> Add Question
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem onClick={() => setFilterExam(null)}>All Exams</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setFilterExam("WAEC")}>WAEC</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setFilterExam("NECO")}>NECO</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setFilterExam("JAMB")}>JAMB</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[525px]">
+                  <DialogHeader>
+                    <DialogTitle>Add New Question</DialogTitle>
+                    <DialogDescription>
+                      Adding to <b>{selectedCategory} &gt; {selectedSubject}</b>
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Topic</Label>
+                      <Input 
+                        placeholder="e.g. Algebra, Organic Chemistry" 
+                        value={newQuestion.topic}
+                        onChange={(e) => setNewQuestion({...newQuestion, topic: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Question Text</Label>
+                      <Textarea 
+                        placeholder="Enter the question here..." 
+                        className="min-h-[100px]"
+                        value={newQuestion.text}
+                        onChange={(e) => setNewQuestion({...newQuestion, text: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit" onClick={handleAddQuestion}>Save Question</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
-
-          {Object.entries(groupedQuestions).length === 0 ? (
-             <Card>
-               <CardContent className="p-8 text-center text-muted-foreground">
-                 No questions found matching your criteria.
-               </CardContent>
-             </Card>
-          ) : (
-            <Accordion type="multiple" defaultValue={Object.keys(groupedQuestions)} className="space-y-4">
-              {Object.entries(groupedQuestions).map(([groupTitle, groupItems]) => (
-                <AccordionItem key={groupTitle} value={groupTitle} className="border border-border rounded-lg bg-card px-4">
-                  <AccordionTrigger className="hover:no-underline py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-primary/10 p-2 rounded text-primary">
-                        <LayoutGrid className="h-4 w-4" />
-                      </div>
-                      <span className="font-bold text-lg">{groupTitle}</span>
-                      <Badge variant="secondary" className="ml-2">{groupItems.length} Questions</Badge>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="pb-4 pt-2">
-                     <div className="rounded-md border">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/50">
-                          <tr>
-                            <th className="h-10 px-4 text-left font-medium text-muted-foreground">Question</th>
-                            <th className="h-10 px-4 text-left font-medium text-muted-foreground">Topic</th>
-                            <th className="h-10 px-4 text-left font-medium text-muted-foreground">Status</th>
-                            <th className="h-10 px-4 text-right font-medium text-muted-foreground">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {groupItems.map((row) => (
-                            <tr key={row.id} className="border-b last:border-0 hover:bg-muted/50">
-                              <td className="p-4 font-medium max-w-[400px] truncate">{row.q}</td>
-                              <td className="p-4">
-                                <Badge variant="outline" className="font-normal">{row.topic}</Badge>
-                              </td>
-                              <td className="p-4">
-                                <Badge variant={row.status === 'Active' ? 'default' : 'outline'} className={row.status === 'Review' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200' : ''}>
-                                  {row.status}
-                                </Badge>
-                              </td>
-                              <td className="p-4 text-right">
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                      <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem>
-                                      <Edit className="mr-2 h-4 w-4" /> Edit
-                                    </DropdownMenuItem>
-                                    {row.status === 'Review' ? (
-                                      <DropdownMenuItem className="text-green-600" onClick={() => handleStatusChange(row.id, 'Active')}>
-                                        <Check className="mr-2 h-4 w-4" /> Approve
-                                      </DropdownMenuItem>
-                                    ) : null}
-                                    <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(row.id)}>
-                                      <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          )}
         </div>
+
+        {/* View State: Categories (Level 1) */}
+        {viewState === "categories" && (
+          <div className="grid md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4">
+            {["WAEC", "NECO", "JAMB"].map((exam) => (
+              <Card 
+                key={exam} 
+                className="hover:shadow-lg transition-all cursor-pointer border-2 hover:border-primary group"
+                onClick={() => handleCategorySelect(exam)}
+              >
+                <CardContent className="p-8 flex flex-col items-center justify-center text-center space-y-4">
+                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-colors">
+                    <BookOpen className="h-8 w-8 text-primary group-hover:text-white" />
+                  </div>
+                  <h2 className="text-2xl font-bold">{exam}</h2>
+                  <p className="text-muted-foreground">Manage {exam} Question Bank</p>
+                  <Button variant="ghost" className="group-hover:translate-x-1 transition-transform">
+                    View Subjects <ChevronRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* View State: Subjects (Level 2) */}
+        {viewState === "subjects" && (
+           <div className="animate-in fade-in slide-in-from-right-4">
+             <div className="mb-6 flex items-center gap-2 text-muted-foreground">
+                <span className="font-medium text-foreground">{selectedCategory}</span>
+                <ChevronRight className="h-4 w-4" />
+                <span>Select Subject</span>
+             </div>
+             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+               {subjectsList.map((subject) => (
+                 <Card 
+                    key={subject} 
+                    className="hover:bg-accent/50 cursor-pointer transition-colors"
+                    onClick={() => handleSubjectSelect(subject)}
+                  >
+                   <CardContent className="p-6 flex items-center justify-between">
+                     <div className="flex items-center gap-3">
+                       <div className="h-10 w-10 rounded bg-primary/10 flex items-center justify-center text-primary font-bold">
+                         {subject.charAt(0)}
+                       </div>
+                       <span className="font-medium">{subject}</span>
+                     </div>
+                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                   </CardContent>
+                 </Card>
+               ))}
+             </div>
+           </div>
+        )}
+
+        {/* View State: Questions (Level 3) */}
+        {viewState === "questions" && (
+          <Card className="animate-in fade-in slide-in-from-right-4">
+            <CardHeader>
+               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                  <span>{selectedCategory}</span>
+                  <ChevronRight className="h-3 w-3" />
+                  <span>{selectedSubject}</span>
+               </div>
+               <CardTitle>Questions List</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {filteredQuestions.length === 0 ? (
+                 <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
+                    <p className="mb-2">No questions found for {selectedCategory} - {selectedSubject}.</p>
+                    <Button onClick={() => setIsAddDialogOpen(true)}>Add First Question</Button>
+                 </div>
+              ) : (
+                <div className="rounded-md border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="h-12 px-4 text-left font-medium text-muted-foreground">Question</th>
+                        <th className="h-12 px-4 text-left font-medium text-muted-foreground">Topic</th>
+                        <th className="h-12 px-4 text-left font-medium text-muted-foreground">Status</th>
+                        <th className="h-12 px-4 text-right font-medium text-muted-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredQuestions.map((row) => (
+                        <tr key={row.id} className="border-b last:border-0 hover:bg-muted/50">
+                          <td className="p-4 font-medium max-w-[400px] truncate">{row.q}</td>
+                          <td className="p-4">
+                            <Badge variant="outline" className="font-normal">{row.topic}</Badge>
+                          </td>
+                          <td className="p-4">
+                            <Badge variant={row.status === 'Active' ? 'default' : 'outline'} className={row.status === 'Review' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200' : ''}>
+                              {row.status}
+                            </Badge>
+                          </td>
+                          <td className="p-4 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem>
+                                  <Edit className="mr-2 h-4 w-4" /> Edit
+                                </DropdownMenuItem>
+                                {row.status === 'Review' ? (
+                                  <DropdownMenuItem className="text-green-600" onClick={() => handleStatusChange(row.id, 'Active')}>
+                                    <Check className="mr-2 h-4 w-4" /> Approve
+                                  </DropdownMenuItem>
+                                ) : null}
+                                <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(row.id)}>
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </AdminLayout>
   );
