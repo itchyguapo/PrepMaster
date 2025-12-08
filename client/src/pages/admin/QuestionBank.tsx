@@ -4,12 +4,14 @@ import { Button } from "@/components/ui/button";
 import { 
   Upload, 
   FileText, 
-  CheckCircle, 
-  AlertCircle, 
   Search, 
   Filter,
   MoreVertical,
-  Plus
+  Plus,
+  Trash2,
+  Edit,
+  Check,
+  X
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -19,8 +21,85 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+
+const initialQuestions = [
+  { id: 1, q: "Calculate the value of x if 2x + 5 = 15", exam: "WAEC", subject: "Math", topic: "Algebra", status: "Active" },
+  { id: 2, q: "Which of the following is a noble gas?", exam: "JAMB", subject: "Chemistry", topic: "Periodic Table", status: "Review" },
+  { id: 3, q: "The narrative technique used in the passage...", exam: "JAMB", subject: "Literature", topic: "Literary Devices", status: "Active" },
+  { id: 4, q: "Identify the figure of speech in 'The wind whispered'", exam: "WAEC", subject: "English", topic: "Figurative Expr.", status: "Active" },
+  { id: 5, q: "In a market economy, price is determined by...", exam: "WAEC", subject: "Economics", topic: "Price Mechanism", status: "Draft" },
+];
 
 export default function QuestionBank() {
+  const [questions, setQuestions] = useState(initialQuestions);
+  const [filterExam, setFilterExam] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const { toast } = useToast();
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  // Mock Form State
+  const [newQuestion, setNewQuestion] = useState({
+    text: "",
+    exam: "WAEC",
+    subject: "Mathematics",
+    topic: ""
+  });
+
+  const handleAddQuestion = () => {
+    const q = {
+      id: questions.length + 1,
+      q: newQuestion.text,
+      exam: newQuestion.exam,
+      subject: newQuestion.subject,
+      topic: newQuestion.topic || "General",
+      status: "Active"
+    };
+    setQuestions([q, ...questions]);
+    setIsDialogOpen(false);
+    setNewQuestion({ text: "", exam: "WAEC", subject: "Mathematics", topic: "" });
+    toast({
+      title: "Question Added",
+      description: "New question has been successfully added to the bank.",
+    });
+  };
+
+  const handleDelete = (id: number) => {
+    setQuestions(questions.filter(q => q.id !== id));
+    toast({
+      title: "Question Deleted",
+      description: "Question has been removed.",
+      variant: "destructive"
+    });
+  };
+
+  const handleStatusChange = (id: number, status: string) => {
+    setQuestions(questions.map(q => q.id === id ? { ...q, status } : q));
+    toast({
+      title: "Status Updated",
+      description: `Question marked as ${status}.`,
+    });
+  };
+
+  const filteredQuestions = questions.filter(q => {
+    const matchesSearch = q.q.toLowerCase().includes(searchTerm.toLowerCase()) || q.topic.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesExam = filterExam ? q.exam === filterExam : true;
+    return matchesSearch && matchesExam;
+  });
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -33,13 +112,82 @@ export default function QuestionBank() {
             <Button variant="outline">
               <Upload className="mr-2 h-4 w-4" /> Bulk Import (PDF/Docx)
             </Button>
-            <Button className="bg-primary hover:bg-primary/90">
-              <Plus className="mr-2 h-4 w-4" /> Add Question
-            </Button>
+            
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-primary hover:bg-primary/90">
+                  <Plus className="mr-2 h-4 w-4" /> Add Question
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[525px]">
+                <DialogHeader>
+                  <DialogTitle>Add New Question</DialogTitle>
+                  <DialogDescription>
+                    Manually add a question to the database.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Exam Type</Label>
+                      <Select 
+                        value={newQuestion.exam} 
+                        onValueChange={(val) => setNewQuestion({...newQuestion, exam: val})}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Exam" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="WAEC">WAEC</SelectItem>
+                          <SelectItem value="JAMB">JAMB</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Subject</Label>
+                      <Select 
+                        value={newQuestion.subject} 
+                        onValueChange={(val) => setNewQuestion({...newQuestion, subject: val})}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Subject" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Mathematics">Mathematics</SelectItem>
+                          <SelectItem value="English">English</SelectItem>
+                          <SelectItem value="Physics">Physics</SelectItem>
+                          <SelectItem value="Chemistry">Chemistry</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Topic</Label>
+                    <Input 
+                      placeholder="e.g. Algebra, Organic Chemistry" 
+                      value={newQuestion.topic}
+                      onChange={(e) => setNewQuestion({...newQuestion, topic: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Question Text</Label>
+                    <Textarea 
+                      placeholder="Enter the question here..." 
+                      className="min-h-[100px]"
+                      value={newQuestion.text}
+                      onChange={(e) => setNewQuestion({...newQuestion, text: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="submit" onClick={handleAddQuestion}>Save Question</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
-        {/* AI Processing Queue */}
+        {/* AI Processing Queue (Mock) */}
         <Card className="bg-primary/5 border-primary/20">
           <CardHeader>
             <div className="flex justify-between items-center">
@@ -87,7 +235,12 @@ export default function QuestionBank() {
             <div className="flex flex-col sm:flex-row gap-4 justify-between">
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search questions..." className="pl-9" />
+                <Input 
+                  placeholder="Search questions..." 
+                  className="pl-9" 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="icon">
@@ -95,11 +248,14 @@ export default function QuestionBank() {
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline">Filter by Exam</Button>
+                    <Button variant="outline">
+                      {filterExam ? filterExam : "Filter by Exam"}
+                    </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
-                    <DropdownMenuItem>WAEC</DropdownMenuItem>
-                    <DropdownMenuItem>JAMB</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setFilterExam(null)}>All Exams</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setFilterExam("WAEC")}>WAEC</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setFilterExam("JAMB")}>JAMB</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -118,14 +274,8 @@ export default function QuestionBank() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    { q: "Calculate the value of x if 2x + 5 = 15", exam: "WAEC", subject: "Math", topic: "Algebra", status: "Active" },
-                    { q: "Which of the following is a noble gas?", exam: "JAMB", subject: "Chemistry", topic: "Periodic Table", status: "Review" },
-                    { q: "The narrative technique used in the passage...", exam: "JAMB", subject: "Literature", topic: "Literary Devices", status: "Active" },
-                    { q: "Identify the figure of speech in 'The wind whispered'", exam: "WAEC", subject: "English", topic: "Figurative Expr.", status: "Active" },
-                    { q: "In a market economy, price is determined by...", exam: "WAEC", subject: "Economics", topic: "Price Mechanism", status: "Draft" },
-                  ].map((row, i) => (
-                    <tr key={i} className="border-b transition-colors hover:bg-muted/50">
+                  {filteredQuestions.map((row) => (
+                    <tr key={row.id} className="border-b transition-colors hover:bg-muted/50">
                       <td className="p-4 align-middle font-medium max-w-[300px] truncate">{row.q}</td>
                       <td className="p-4 align-middle">
                         <div className="flex flex-col">
@@ -142,12 +292,36 @@ export default function QuestionBank() {
                         </Badge>
                       </td>
                       <td className="p-4 align-middle">
-                        <Button variant="ghost" size="icon">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem>
+                              <Edit className="mr-2 h-4 w-4" /> Edit
+                            </DropdownMenuItem>
+                            {row.status === 'Review' ? (
+                              <DropdownMenuItem className="text-green-600" onClick={() => handleStatusChange(row.id, 'Active')}>
+                                <Check className="mr-2 h-4 w-4" /> Approve
+                              </DropdownMenuItem>
+                            ) : null}
+                            <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(row.id)}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   ))}
+                  {filteredQuestions.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                        No questions found matching your criteria.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

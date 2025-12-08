@@ -10,6 +10,9 @@ import ExamRoom from "@/pages/ExamRoom";
 import Results from "@/pages/Results";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import QuestionBank from "@/pages/admin/QuestionBank";
+import UserManagement from "@/pages/admin/UserManagement";
+import SystemSettings from "@/pages/admin/SystemSettings";
+import Finance from "@/pages/admin/Finance";
 import TutorDashboard from "@/pages/tutor/TutorDashboard";
 import Pricing from "@/pages/Pricing";
 import ExamSimulation from "@/pages/ExamSimulation";
@@ -27,6 +30,9 @@ function Router() {
       {/* Admin Routes */}
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/questions" component={QuestionBank} />
+      <Route path="/admin/users" component={UserManagement} />
+      <Route path="/admin/finance" component={Finance} />
+      <Route path="/admin/settings" component={SystemSettings} />
       
       {/* Tutor Routes */}
       <Route path="/tutor" component={TutorDashboard} />
