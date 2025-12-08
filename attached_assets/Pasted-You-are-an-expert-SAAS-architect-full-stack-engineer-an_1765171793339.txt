@@ -1,0 +1,168 @@
+You are an expert SAAS architect, full-stack engineer, and educational assessment system designer.
+Your task is to design and generate a fully detailed system specification for a CBT-style exam preparation platform for Nigerian WAEC and JAMB students.
+All outputs must be 95% accurate, scalable, modular, and developer-ready.
+ 
+1. System Purpose
+The system is a subscription-based online CBT practice platform for WAEC and JAMB.
+It must support:
+•	Continuous question uploads
+•	Topic-based organization
+•	Random test generation
+•	Student analysis
+•	Tutor-controlled topic tests
+•	Monetization via three subscription tiers
+•	PDF & DOCX question ingestion with optional AI topic tagging
+ 
+2. Question Bank Requirements
+2.1 Continuous Expansion
+Admins must be able to upload new questions at any time.
+2.2 Metadata Tags for Each Question
+Each question must include:
+•	Exam type → WAEC or JAMB
+•	Subject
+•	Topic
+•	Sub-topic (optional)
+•	Difficulty (easy/medium/hard)
+•	Year (optional)
+•	Question type: Objective (A–D), Theory, Passage-based
+•	Correct answer
+•	Explanation (optional)
+2.3 Upload Formats
+Admin should be able to upload questions via:
+•	PDF
+•	DOCX
+•	CSV
+•	JSON
+The system must provide:
+🤖 2.4 Automatic Extraction & Topic Classification (AI-enabled)
+•	Extract text and images from PDF/DOCX
+•	Auto-split into question + answer choices
+•	Auto-detect subject
+•	AI recommends topics using NLP
+•	Admin can edit topic suggestions before saving
+•	Bulk upload supported
+2.5 Manual Mode
+Admin may also manually enter questions through a form.
+ 
+3. Exam/Test Generation (Student Mode)
+3.1 Student Flow
+Student logs in → chooses WAEC or JAMB → chooses subjects → chooses number of questions → test begins.
+3.2 Supported Subject Lists
+System must maintain separate, complete subject lists for:
+WAEC Subjects (full list required)
+(Mathematics, English Language, Biology, Physics, Chemistry, Economics, Commerce, Government, Literature, CRS/IRS, Geography, Accounting, Data Processing, Agric Science, Further Mathematics, Marketing, Civic Education, etc.)
+JAMB Subjects (full list required)
+(Use of English, Mathematics, Physics, Chemistry, Biology, Government, Economics, Literature, CRS/IRS, Commerce, Accounting, Geography, Agriculture, etc.)
+3.3 Question Count Options
+•	Full WAEC Standard
+•	Full JAMB Standard (40 per subject, 60 for English)
+•	Custom → 20 / 30 / 50 / 100 / user-selected
+3.4 Randomization Logic
+When a student starts a test:
+•	Randomly select questions across topics
+•	Ensure topic balance where possible
+•	Mix difficulty levels
+•	Avoid repeating questions used earlier (if possible)
+•	Shuffle answer options A–D
+•	Shuffle question order
+•	Allow fresh random set for every new attempt
+3.5 Test-Taking Interface
+•	Timer (optional or exam-standard)
+•	Navigation panel
+•	Submit button
+•	Auto-marking
+•	Result summary
+ 
+4. Tutor / Teacher Mode
+Tutors can:
+•	Choose exam → subject → topic
+•	Enter number of questions
+•	Generate topic-specific tests for students
+•	Assign test links
+•	View student performance per topic
+This supports classroom teaching & revision.
+ 
+5. Student Analytics Dashboard
+System must generate:
+•	Score per subject
+•	Score per topic
+•	Weak-topic detection
+•	Study recommendations
+•	Historical performance chart
+•	Accuracy rate per attempt
+•	Strength heatmaps
+ 
+6. Subscription System (SAAS Model)
+Three Monthly Tiers in Nigerian Naira
+⭐ Tier 1 – Basic (₦1,500/month)
+•	WAEC or JAMB (choose one)
+•	1 full CBT per day
+•	No tutor mode
+⭐ Tier 2 – Standard (₦2,500/month)
+•	Access to both WAEC & JAMB
+•	Unlimited CBT practice
+•	Analytics dashboard
+•	Topic-based practice
+⭐ Tier 3 – Premium (₦4,000/month)
+•	Everything in Standard
+•	Tutor mode
+•	Advanced analytics
+•	Priority support
+•	Optional offline mode (if mobile app supports caching)
+System must support:
+•	Auto-renewal
+•	One-time purchase
+•	Expiration reminders
+ 
+7. Admin Dashboard Requirements
+Admins must be able to:
+•	Upload/edit/delete questions
+•	Approve AI-classified topics
+•	View user growth analytics
+•	Manage tutors & students
+•	See revenue and subscription data
+•	Export system logs
+•	Manage subject & topic lists
+ 
+8. Technical Requirements
+8.1 Architecture
+•	Backend: Node.js / Python (Django/FastAPI) / Go
+•	Frontend: React / Next.js / Vue
+•	Database: PostgreSQL (recommended)
+•	Caching: Redis
+•	Storage: AWS S3 or Cloudinary
+•	PDF/DOCX parsing: Tesseract OCR + NLP pipeline
+•	AI topic classification using embeddings (OpenAI, local LLM, or custom model)
+8.2 Security
+•	JWT authentication
+•	Secure question endpoints
+•	Anti-scraping protection
+•	Encrypted subscriptions
+•	Rate limiting
+ 
+9. Exam Simulation Mode
+Provide a mode that replicates the official WAEC or JAMB UI, including:
+•	Color scheme
+•	Timers
+•	Navigation
+•	Question layout
+ 
+10. Database Schema Requirements
+AI should generate:
+•	Full relational database schema
+•	Tables for users, subscriptions, payments, questions, subjects, topics, attempts, results, analytics, tutor groups
+ 
+11. Output Requirements for AI
+When using this prompt, the AI must output:
+•	System architecture
+•	Database schema
+•	Data models
+•	API endpoints
+•	User flows (diagrams if possible)
+•	Randomization algorithm
+•	OCR + Topic-Classification pipeline
+•	Subscription workflow
+•	Full admin panel functions
+•	Deployment plan
+•	Scaling recommendations
+•	Security considerations

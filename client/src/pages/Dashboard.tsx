@@ -35,12 +35,20 @@ export default function Dashboard() {
             <h1 className="text-3xl font-display font-bold text-foreground">Welcome back, Chidimma! 👋</h1>
             <p className="text-muted-foreground mt-1">You're on a 5-day streak. Keep it up!</p>
           </div>
-          <Link href="/exam">
-            <Button size="lg" className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
-              <PlayCircle className="mr-2 h-5 w-5" />
-              Quick Practice
-            </Button>
-          </Link>
+          <div className="flex gap-3">
+             <Link href="/exam/simulation">
+              <Button size="lg" variant="outline" className="border-primary/20 hover:bg-primary/5 hover:text-primary">
+                <Clock className="mr-2 h-5 w-5" />
+                Mock Exam
+              </Button>
+            </Link>
+            <Link href="/exam">
+              <Button size="lg" className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
+                <PlayCircle className="mr-2 h-5 w-5" />
+                Quick Practice
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Stats Grid */}

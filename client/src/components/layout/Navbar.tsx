@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Menu, X } from "lucide-react";
+import { BookOpen, Menu, X, Shield, GraduationCap } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
@@ -11,7 +11,7 @@ export function Navbar() {
     { href: "/features", label: "Features" },
     { href: "/pricing", label: "Pricing" },
     { href: "/resources", label: "Resources" },
-    { href: "/dashboard", label: "Dashboard" }, // Direct link for prototype
+    { href: "/dashboard", label: "Student Dashboard" },
   ];
 
   return (
@@ -27,7 +27,7 @@ export function Navbar() {
         </Link>
 
         {/* Desktop Nav */}
-        <div className="hidden md:flex items-center gap-8">
+        <div className="hidden md:flex items-center gap-6">
           {links.map((link) => (
             <Link key={link.href} href={link.href}>
               <a className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
@@ -35,7 +35,24 @@ export function Navbar() {
               </a>
             </Link>
           ))}
-          <div className="flex items-center gap-4">
+          
+          <div className="h-4 w-[1px] bg-border mx-2" />
+          
+          {/* Prototype Links for Reviewers */}
+          <div className="flex items-center gap-2">
+             <Link href="/tutor">
+              <a className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1">
+                <GraduationCap className="h-3 w-3" /> Tutor
+              </a>
+            </Link>
+            <Link href="/admin">
+              <a className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1">
+                <Shield className="h-3 w-3" /> Admin
+              </a>
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-4 ml-4">
             <Link href="/login">
               <Button variant="ghost" className="font-semibold text-muted-foreground hover:text-foreground">
                 Log in
@@ -66,6 +83,16 @@ export function Navbar() {
                     </a>
                   </Link>
                 ))}
+                <Link href="/admin">
+                    <a className="text-lg font-medium hover:text-primary transition-colors flex items-center gap-2" onClick={() => setIsOpen(false)}>
+                      <Shield className="h-4 w-4" /> Admin Portal
+                    </a>
+                </Link>
+                <Link href="/tutor">
+                    <a className="text-lg font-medium hover:text-primary transition-colors flex items-center gap-2" onClick={() => setIsOpen(false)}>
+                      <GraduationCap className="h-4 w-4" /> Tutor Portal
+                    </a>
+                </Link>
               </div>
               <div className="flex flex-col gap-4">
                 <Button variant="outline" className="w-full">Log in</Button>
