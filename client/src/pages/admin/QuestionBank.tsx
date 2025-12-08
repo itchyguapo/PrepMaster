@@ -11,10 +11,14 @@ import {
   Trash2,
   Edit,
   Check,
-  X
+  X,
+  Loader2,
+  AlertCircle,
+  FileCheck
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,7 +37,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 const initialQuestions = [
@@ -49,7 +53,18 @@ export default function QuestionBank() {
   const [filterExam, setFilterExam] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // Dialog States
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+
+  // Import Flow States
+  const [importStep, setImportStep] = useState<"upload" | "processing" | "preview">("upload");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [previewQuestions, setPreviewQuestions] = useState<any[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Mock Form State
   const [newQuestion, setNewQuestion] = useState({
@@ -69,7 +84,7 @@ export default function QuestionBank() {
       status: "Active"
     };
     setQuestions([q, ...questions]);
-    setIsDialogOpen(false);
+    setIsAddDialogOpen(false);
     setNewQuestion({ text: "", exam: "WAEC", subject: "Mathematics", topic: "" });
     toast({
       title: "Question Added",
@@ -100,6 +115,81 @@ export default function QuestionBank() {
     return matchesSearch && matchesExam;
   });
 
+  // --- Bulk Import Logic ---
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  const startUpload = () => {
+    if (!selectedFile) return;
+    setImportStep("processing");
+    
+    // Simulate Upload
+    let up = 0;
+    const uploadInterval = setInterval(() => {
+      up += 10;
+      setUploadProgress(up);
+      if (up >= 100) {
+        clearInterval(uploadInterval);
+        // Start Processing simulation
+        startProcessing();
+      }
+    }, 200);
+  };
+
+  const startProcessing = () => {
+    let proc = 0;
+    const processInterval = setInterval(() => {
+      proc += 5;
+      setProcessingProgress(proc);
+      if (proc >= 100) {
+        clearInterval(processInterval);
+        // Generate Mock Preview Data based on filename or just random
+        const mockExtracted = [
+          { id: 101, q: "What is the capital of Nigeria?", exam: "JAMB", subject: "Civic Education", topic: "Government", status: "Review" },
+          { id: 102, q: "Solve for x: 3x - 9 = 0", exam: "WAEC", subject: "Mathematics", topic: "Algebra", status: "Review" },
+          { id: 103, q: "The powerhouse of the cell is...", exam: "JAMB", subject: "Biology", topic: "Cell Biology", status: "Review" },
+        ];
+        setPreviewQuestions(mockExtracted);
+        setImportStep("preview");
+      }
+    }, 100);
+  };
+
+  const confirmImport = () => {
+    // Merge preview questions into main list
+    // In a real app, IDs would be handled by backend
+    const newQs = previewQuestions.map((q, idx) => ({
+      ...q,
+      id: Date.now() + idx, // temporary unique ID
+      status: "Active" // Auto-approve for demo or keep as Review
+    }));
+    
+    setQuestions([...newQs, ...questions]);
+    setIsImportDialogOpen(false);
+    resetImport();
+    toast({
+      title: "Import Successful",
+      description: `Successfully imported ${newQs.length} questions.`,
+    });
+  };
+
+  const resetImport = () => {
+    setImportStep("upload");
+    setSelectedFile(null);
+    setUploadProgress(0);
+    setProcessingProgress(0);
+    setPreviewQuestions([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removePreviewQuestion = (id: number) => {
+    setPreviewQuestions(previewQuestions.filter(q => q.id !== id));
+  };
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -109,11 +199,136 @@ export default function QuestionBank() {
             <p className="text-muted-foreground">Manage and expand the repository of exam questions.</p>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline">
-              <Upload className="mr-2 h-4 w-4" /> Bulk Import (PDF/Docx)
-            </Button>
+            {/* Bulk Import Dialog */}
+            <Dialog open={isImportDialogOpen} onOpenChange={(open) => {
+              setIsImportDialogOpen(open);
+              if (!open) resetImport();
+            }}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Upload className="mr-2 h-4 w-4" /> Bulk Import (PDF/Docx)
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                  <DialogTitle>Bulk Import Questions</DialogTitle>
+                  <DialogDescription>
+                    Upload exam papers (PDF, DOCX) to automatically extract questions.
+                  </DialogDescription>
+                </DialogHeader>
+
+                {importStep === "upload" && (
+                  <div className="grid gap-4 py-8">
+                    <div 
+                      className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-12 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                        <Upload className="h-6 w-6 text-primary" />
+                      </div>
+                      <h3 className="font-semibold text-lg mb-1">
+                        {selectedFile ? selectedFile.name : "Click to upload or drag and drop"}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        PDF, DOCX, or CSV (Max 10MB)
+                      </p>
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        className="hidden" 
+                        accept=".pdf,.docx,.csv" 
+                        onChange={handleFileSelect}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {importStep === "processing" && (
+                  <div className="py-8 space-y-6">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Uploading file...</span>
+                        <span>{uploadProgress}%</span>
+                      </div>
+                      <Progress value={uploadProgress} className="h-2" />
+                    </div>
+                    
+                    {uploadProgress === 100 && (
+                      <div className="space-y-2">
+                         <div className="flex justify-between text-sm">
+                          <span className="flex items-center gap-2">
+                            <Loader2 className="h-3 w-3 animate-spin" /> 
+                            AI Analyzing & Extracting...
+                          </span>
+                          <span>{processingProgress}%</span>
+                        </div>
+                        <Progress value={processingProgress} className="h-2 bg-primary/20" />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {importStep === "preview" && (
+                  <div className="py-4">
+                    <div className="flex items-center gap-2 mb-4 p-3 bg-green-50 text-green-700 rounded-md text-sm border border-green-200">
+                      <FileCheck className="h-4 w-4" />
+                      <span>Successfully extracted {previewQuestions.length} questions from <b>{selectedFile?.name}</b></span>
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto border rounded-md">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted sticky top-0">
+                          <tr>
+                            <th className="p-2 text-left">Question Preview</th>
+                            <th className="p-2 text-left">Detected Topic</th>
+                            <th className="p-2 w-[50px]"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {previewQuestions.map((q) => (
+                            <tr key={q.id} className="border-b last:border-0">
+                              <td className="p-2 align-top">{q.q}</td>
+                              <td className="p-2 align-top">
+                                <Badge variant="outline">{q.topic}</Badge>
+                              </td>
+                              <td className="p-2 align-top text-right">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                  onClick={() => removePreviewQuestion(q.id)}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                <DialogFooter>
+                  {importStep === "upload" && (
+                    <Button onClick={startUpload} disabled={!selectedFile}>
+                      Start Processing
+                    </Button>
+                  )}
+                  {importStep === "processing" && (
+                    <Button disabled>Processing...</Button>
+                  )}
+                  {importStep === "preview" && (
+                    <div className="flex gap-2 w-full justify-end">
+                      <Button variant="outline" onClick={resetImport}>Cancel</Button>
+                      <Button onClick={confirmImport}>Import {previewQuestions.length} Questions</Button>
+                    </div>
+                  )}
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            {/* Add Manual Question Dialog */}
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-primary hover:bg-primary/90">
                   <Plus className="mr-2 h-4 w-4" /> Add Question
@@ -200,31 +415,27 @@ export default function QuestionBank() {
                   AI Processing Pipeline
                 </CardTitle>
                 <CardDescription>
-                  3 files currently being analyzed and tagged.
+                  System automatically processes uploaded files.
                 </CardDescription>
               </div>
-              <Button size="sm" variant="secondary">View Queue</Button>
+              <Button size="sm" variant="secondary">View History</Button>
             </div>
           </CardHeader>
           <CardContent>
+            {/* Show recently processed items if any */}
             <div className="space-y-3">
-              {[
-                { file: "WAEC_Math_2023.pdf", status: "Extracting Text", progress: 45 },
-                { file: "JAMB_English_Past_Questions.docx", status: "Classifying Topics", progress: 80 },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-4 bg-background p-3 rounded-lg border border-border">
+               <div className="flex items-center gap-4 bg-background p-3 rounded-lg border border-border">
                   <FileText className="h-8 w-8 text-muted-foreground" />
                   <div className="flex-1">
                     <div className="flex justify-between mb-1">
-                      <span className="font-medium text-sm">{item.file}</span>
-                      <span className="text-xs text-muted-foreground">{item.status}</span>
+                      <span className="font-medium text-sm">JAMB_English_Past_Questions.docx</span>
+                      <span className="text-xs text-green-600 font-medium">Completed</span>
                     </div>
                     <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-primary transition-all duration-500" style={{ width: `${item.progress}%` }} />
+                      <div className="h-full bg-green-500 w-full" />
                     </div>
                   </div>
                 </div>
-              ))}
             </div>
           </CardContent>
         </Card>
