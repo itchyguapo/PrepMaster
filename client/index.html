@@ -21,6 +21,38 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Suppress Chrome extension errors before React loads
+      (function() {
+        // Suppress console errors from Chrome extensions
+        const originalError = console.error;
+        console.error = function(...args) {
+          const message = args[0]?.toString() || '';
+          if (
+            message.includes('Unchecked runtime.lastError') ||
+            message.includes('message port closed') ||
+            message.includes('Could not establish connection') ||
+            message.includes('Receiving end does not exist')
+          ) {
+            return; // Silently ignore extension errors
+          }
+          originalError.apply(console, args);
+        };
+
+        // Suppress unhandled promise rejections from extensions
+        window.addEventListener('unhandledrejection', function(event) {
+          const message = event.reason?.message || String(event.reason || '');
+          if (
+            message.includes('message port closed') ||
+            message.includes('Could not establish connection') ||
+            message.includes('Receiving end does not exist') ||
+            message.includes('runtime.lastError')
+          ) {
+            event.preventDefault();
+          }
+        }, true);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

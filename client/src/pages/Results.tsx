@@ -15,6 +15,8 @@ import {
   ChevronDown
 } from "lucide-react";
 import { Link } from "wouter";
+import { useEffect, useState } from "react";
+import { getLatestAttempt, ExamAttempt } from "@/lib/offlineStorage";
 import {
   Accordion,
   AccordionContent,
@@ -22,15 +24,139 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
+type ResultQuestion = {
+  id: string;
+  q: string;
+  yourAnswer: string;
+  correctAnswer?: string;
+  correct: boolean;
+  explanation?: string;
+};
+
 export default function Results() {
+  const [attempt, setAttempt] = useState<ExamAttempt | null>(null);
+  const [questions, setQuestions] = useState<ResultQuestion[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchResults = async () => {
+      try {
+        // First try to get from API
+        const latest = await getLatestAttempt();
+        if (latest && latest.status === "completed") {
+          setAttempt(latest);
+          // Fetch detailed results from API
+          const res = await fetch(`/api/results/${latest.id}`);
+          if (res.ok) {
+            const data = await res.json();
+            setAttempt(data.attempt);
+            setQuestions(data.questions || []);
+          } else {
+            // Fallback to local data
+            setQuestions([]);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching results:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    void fetchResults();
+  }, []);
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="max-w-4xl mx-auto space-y-8 pb-12 text-center">
+          <p>Loading results...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!attempt) {
+    return (
+      <AppLayout>
+        <div className="max-w-4xl mx-auto space-y-8 pb-12 text-center">
+          <p className="text-muted-foreground">No completed exam found.</p>
+          <Link href="/dashboard">
+            <Button>Back to Dashboard</Button>
+          </Link>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  const totalAnswered = attempt ? Object.keys(attempt.answers || {}).length : 0;
+  const totalQuestions = attempt?.totalQuestions ?? (questions.length || 60);
+  const correctAnswers = questions.filter(q => q.correct).length;
+  const accuracy = totalQuestions ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
+
+  // Dynamic feedback based on score
+  const getFeedback = (score: number) => {
+    if (score >= 90) {
+      return {
+        message: "Outstanding Performance! 🌟",
+        description: "You've demonstrated exceptional mastery of the material. Keep up the excellent work!",
+        emoji: "🌟",
+        color: "text-green-600"
+      };
+    } else if (score >= 80) {
+      return {
+        message: "Excellent Work! 🎉",
+        description: "You're performing very well! You have a strong understanding of the concepts.",
+        emoji: "🎉",
+        color: "text-green-600"
+      };
+    } else if (score >= 70) {
+      return {
+        message: "Good Job! 👍",
+        description: "You're on the right track. With a bit more practice, you can reach even higher scores.",
+        emoji: "👍",
+        color: "text-blue-600"
+      };
+    } else if (score >= 60) {
+      return {
+        message: "Keep Practicing! 💪",
+        description: "You're making progress! Review the areas you missed and keep practicing to improve.",
+        emoji: "💪",
+        color: "text-yellow-600"
+      };
+    } else if (score >= 50) {
+      return {
+        message: "Room for Improvement 📚",
+        description: "Don't give up! Focus on understanding the concepts you missed and try again.",
+        emoji: "📚",
+        color: "text-orange-600"
+      };
+    } else {
+      return {
+        message: "Keep Learning! 📖",
+        description: "Every attempt is a learning opportunity. Review the explanations and practice more.",
+        emoji: "📖",
+        color: "text-red-600"
+      };
+    }
+  };
+
+  const feedback = getFeedback(accuracy);
+
   return (
     <AppLayout>
       <div className="max-w-4xl mx-auto space-y-8 pb-12">
         {/* Header */}
         <div className="text-center space-y-4">
           <Badge className="bg-green-100 text-green-700 hover:bg-green-200 text-sm px-4 py-1">Exam Completed</Badge>
-          <h1 className="text-4xl font-display font-bold">Great Job, Chidimma! 🎉</h1>
-          <p className="text-muted-foreground text-lg">You've completed the JAMB Mathematics 2024 Practice Test.</p>
+          <h1 className={`text-4xl font-display font-bold ${feedback.color}`}>
+            {feedback.message} {feedback.emoji}
+          </h1>
+          <p className="text-muted-foreground text-lg">
+            {attempt ? `You completed ${attempt.examId}` : "You've completed the JAMB Mathematics 2024 Practice Test."}
+          </p>
+          <p className={`text-base ${feedback.color} font-medium max-w-2xl mx-auto`}>
+            {feedback.description}
+          </p>
         </div>
 
         {/* Score Card */}
@@ -40,11 +166,11 @@ export default function Results() {
               <div className="text-center md:text-left space-y-2">
                 <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Score</p>
                 <div className="flex items-baseline gap-2 justify-center md:justify-start">
-                  <span className="text-6xl font-bold font-display text-primary">72</span>
+                  <span className="text-6xl font-bold font-display text-primary">{accuracy}</span>
                   <span className="text-2xl text-muted-foreground font-medium">/ 100</span>
                 </div>
                 <p className="text-sm font-medium text-green-600 flex items-center justify-center md:justify-start gap-1">
-                  <span className="bg-green-100 px-2 py-0.5 rounded-full">+12%</span> better than last time
+                  <span className="bg-green-100 px-2 py-0.5 rounded-full">{accuracy}%</span> completion rate
                 </p>
               </div>
 
@@ -53,22 +179,22 @@ export default function Results() {
                   <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 mx-auto mb-2">
                     <CheckCircle2 className="h-6 w-6" />
                   </div>
-                  <p className="text-2xl font-bold">43</p>
+                  <p className="text-2xl font-bold">{correctAnswers}</p>
                   <p className="text-xs text-muted-foreground font-medium uppercase">Correct</p>
                 </div>
                 <div>
                   <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 mx-auto mb-2">
                     <XCircle className="h-6 w-6" />
                   </div>
-                  <p className="text-2xl font-bold">12</p>
-                  <p className="text-xs text-muted-foreground font-medium uppercase">Wrong</p>
+                  <p className="text-2xl font-bold">{totalAnswered - correctAnswers}</p>
+                  <p className="text-xs text-muted-foreground font-medium uppercase">Incorrect</p>
                 </div>
                 <div>
                   <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 mx-auto mb-2">
                     <AlertCircle className="h-6 w-6" />
                   </div>
-                  <p className="text-2xl font-bold">5</p>
-                  <p className="text-xs text-muted-foreground font-medium uppercase">Skipped</p>
+                  <p className="text-2xl font-bold">{totalQuestions - totalAnswered}</p>
+                  <p className="text-xs text-muted-foreground font-medium uppercase">Unanswered</p>
                 </div>
               </div>
             </div>
@@ -79,26 +205,34 @@ export default function Results() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Time Taken</span>
-                  <span className="font-bold">45m 12s</span>
+                  <span className="font-bold">
+                    {attempt.durationSeconds 
+                      ? `${Math.floor(attempt.durationSeconds / 60)}m ${attempt.durationSeconds % 60}s`
+                      : "N/A"}
+                  </span>
                 </div>
-                <Progress value={75} className="h-2" />
-                <p className="text-xs text-muted-foreground">Avg. 45s per question</p>
+                <Progress value={attempt.durationSeconds ? Math.min(100, (attempt.durationSeconds / 3600) * 100) : 0} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  {attempt.durationSeconds && totalQuestions
+                    ? `Avg. ${Math.round(attempt.durationSeconds / totalQuestions)}s per question`
+                    : "N/A"}
+                </p>
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Topic Mastery</span>
-                  <span className="font-bold">Good</span>
+                  <span>Completion</span>
+                  <span className="font-bold">{Math.round((totalAnswered / totalQuestions) * 100)}%</span>
                 </div>
-                <Progress value={65} className="h-2 bg-secondary/20" indicatorClassName="bg-secondary" />
-                <p className="text-xs text-muted-foreground">Strong in Algebra, Weak in Geometry</p>
+                <Progress value={(totalAnswered / totalQuestions) * 100} className="h-2 bg-secondary/20" indicatorClassName="bg-secondary" />
+                <p className="text-xs text-muted-foreground">{totalAnswered} of {totalQuestions} questions answered</p>
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Accuracy</span>
-                  <span className="font-bold">78%</span>
+                  <span className="font-bold">{accuracy}%</span>
                 </div>
-                <Progress value={78} className="h-2 bg-primary/20" indicatorClassName="bg-primary" />
-                <p className="text-xs text-muted-foreground">Top 15% of students</p>
+                <Progress value={accuracy} className="h-2 bg-primary/20" indicatorClassName="bg-primary" />
+                <p className="text-xs text-muted-foreground">{correctAnswers} correct out of {totalAnswered} answered</p>
               </div>
             </div>
           </CardContent>
@@ -127,30 +261,7 @@ export default function Results() {
           <Card>
             <CardContent className="p-0">
               <Accordion type="single" collapsible className="w-full">
-                {[
-                  {
-                    id: 1,
-                    q: "Find the quadratic equation whose roots are -2/3 and 4.",
-                    yourAnswer: "3x² - 10x - 8 = 0 (Correct)",
-                    correct: true,
-                    explanation: "Sum of roots = -2/3 + 4 = 10/3. Product of roots = -8/3. Equation: x² - (sum)x + (product) = 0 => x² - 10/3x - 8/3 = 0. Multiply by 3: 3x² - 10x - 8 = 0."
-                  },
-                  {
-                    id: 2,
-                    q: "Which of the following is NOT a property of sound waves?",
-                    yourAnswer: "Polarization (Correct)",
-                    correct: true,
-                    explanation: "Sound waves are longitudinal waves and cannot be polarized. Only transverse waves (like light) can be polarized."
-                  },
-                  {
-                    id: 3,
-                    q: "The main function of the phloem in plants is to transport?",
-                    yourAnswer: "Water (Incorrect)",
-                    correctAnswer: "Manufactured food",
-                    correct: false,
-                    explanation: "Xylem transports water and mineral salts. Phloem transports manufactured food (translocation)."
-                  }
-                ].map((item, i) => (
+                {questions.length > 0 ? questions.map((item, i) => (
                   <AccordionItem key={i} value={`item-${i}`} className="px-6 border-b last:border-0">
                     <AccordionTrigger className="hover:no-underline py-4">
                       <div className="flex items-start gap-4 text-left">
@@ -174,7 +285,11 @@ export default function Results() {
                       </div>
                     </AccordionContent>
                   </AccordionItem>
-                ))}
+                )) : (
+                  <div className="p-6 text-center text-muted-foreground">
+                    No detailed question analysis available.
+                  </div>
+                )}
               </Accordion>
             </CardContent>
           </Card>

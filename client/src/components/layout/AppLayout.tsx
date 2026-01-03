@@ -13,13 +13,79 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/contexts/AuthContext";
+import { useEffect, useState } from "react";
+// Ads removed
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface AppLayoutProps {
   children: React.ReactNode;
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+  const { user, subscriptionStatus, signOut } = useAuth();
+  const [userData, setUserData] = useState<{
+    username: string;
+    subscriptionPlan: string;
+  } | null>(null);
+
+  // Fetch user data for display
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user) {
+        setUserData(null);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/auth/me?supabaseId=${user.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setUserData({
+            username: data.username || user.email?.split("@")[0] || "User",
+            subscriptionPlan: data.subscriptionPlan || "basic",
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+        // Fallback to Supabase user data
+        setUserData({
+          username: user.email?.split("@")[0] || "User",
+          subscriptionPlan: "basic",
+        });
+      }
+    };
+
+    if (user) {
+      void fetchUserData();
+    }
+  }, [user]);
+
+  const handleLogout = async () => {
+    await signOut();
+    setLocation("/");
+  };
+
+  const displayName = userData?.username || user?.email?.split("@")[0] || "User";
+  // Show plan name in subscription label
+  const planDisplayName = userData?.subscriptionPlan 
+    ? userData.subscriptionPlan.charAt(0).toUpperCase() + userData.subscriptionPlan.slice(1)
+    : "Basic";
+  const subscriptionLabel = `PrepMaster Student • ${planDisplayName}`;
+  const initials = displayName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) || "U";
 
   const sidebarLinks = [
     { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -31,13 +97,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   const Sidebar = () => (
     <div className="h-full flex flex-col bg-card border-r border-border">
       <div className="p-6">
-        <Link href="/">
-          <a className="flex items-center gap-2 font-display font-bold text-2xl text-primary tracking-tight">
-            <div className="bg-primary/10 p-1.5 rounded-lg">
-              <BookOpen className="h-6 w-6 text-primary" />
-            </div>
-            PrepMaster<span className="text-secondary">NG</span>
-          </a>
+        <Link href="/" className="flex items-center gap-2 font-display font-bold text-2xl text-primary tracking-tight">
+          <div className="bg-primary/10 p-1.5 rounded-lg">
+            <BookOpen className="h-6 w-6 text-primary" />
+          </div>
+          PrepMaster<span className="text-secondary">NG</span>
         </Link>
       </div>
 
@@ -45,26 +109,24 @@ export function AppLayout({ children }: AppLayoutProps) {
         {sidebarLinks.map((link) => {
           const isActive = location === link.href;
           return (
-            <Link key={link.href} href={link.href}>
-              <a className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${
+            <Link 
+              key={link.href} 
+              href={link.href}
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${
                 isActive 
                   ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" 
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              }`}>
-                <link.icon className={`h-5 w-5 ${isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary"}`} />
-                <span className="font-medium">{link.label}</span>
-              </a>
+              }`}
+            >
+              <link.icon className={`h-5 w-5 ${isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary"}`} />
+              <span className="font-medium">{link.label}</span>
             </Link>
           );
         })}
       </div>
 
-      <div className="p-4 mt-auto border-t border-border">
-        <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 gap-3">
-          <LogOut className="h-5 w-5" />
-          Log out
-        </Button>
-      </div>
+      {/* Ads removed */}
+
     </div>
   );
 
@@ -90,7 +152,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <Sidebar />
               </SheetContent>
             </Sheet>
-            <span className="font-display font-bold text-lg">PrepMaster</span>
+            <Link href="/" className="flex items-center gap-2 font-display font-bold text-lg text-primary hover:opacity-80 transition-opacity">
+              <BookOpen className="h-5 w-5" />
+              PrepMaster
+            </Link>
           </div>
 
           <div className="hidden md:flex items-center max-w-md w-full relative">
@@ -104,16 +169,40 @@ export function AppLayout({ children }: AppLayoutProps) {
               <span className="absolute top-2 right-2 h-2 w-2 bg-destructive rounded-full border-2 border-background" />
             </Button>
             <div className="h-8 w-[1px] bg-border mx-2 hidden sm:block" />
-            <div className="flex items-center gap-3">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold">Chidimma O.</p>
-                <p className="text-xs text-muted-foreground">Premium Student</p>
-              </div>
-              <Avatar className="h-9 w-9 border-2 border-background ring-2 ring-border">
-                <AvatarImage src="https://github.com/shadcn.png" />
-                <AvatarFallback>CO</AvatarFallback>
-              </Avatar>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                  <div className="text-right hidden sm:block">
+                    <p className="text-sm font-semibold">{displayName}</p>
+                    <p className="text-xs text-muted-foreground">{subscriptionLabel}</p>
+                  </div>
+                  <Avatar className="h-9 w-9 border-2 border-background ring-2 ring-border">
+                    <AvatarImage src={user?.user_metadata?.avatar_url} />
+                    <AvatarFallback>{initials}</AvatarFallback>
+                  </Avatar>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">{displayName}</p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      {user?.email}
+                    </p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setLocation("/settings")}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 

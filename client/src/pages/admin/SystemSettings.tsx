@@ -11,28 +11,79 @@ import {
   Edit2, 
   Save, 
   RotateCcw,
-  BookOpen
+  BookOpen,
+  Loader2,
+  ExternalLink
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { adminFetch } from "@/lib/adminApi";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useLocation } from "wouter";
+
+type Subject = {
+  id: string;
+  name: string;
+  categoryId: string;
+  examBodyId: string;
+  examBodyName?: string;
+  categoryName?: string;
+};
 
 export default function SystemSettings() {
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [subjects, setSubjects] = useState([
-    { id: 1, name: "Mathematics", type: "All Exams", active: true },
-    { id: 2, name: "English Language", type: "All Exams", active: true },
-    { id: 3, name: "Physics", type: "All Exams", active: true },
-    { id: 4, name: "Chemistry", type: "All Exams", active: true },
-    { id: 5, name: "Biology", type: "All Exams", active: true },
-    { id: 6, name: "Civic Education", type: "WAEC/NECO", active: true },
-    { id: 7, name: "Use of English", type: "JAMB", active: true },
-    { id: 8, name: "Further Mathematics", type: "WAEC/NECO", active: true },
-    { id: 9, name: "Economics", type: "All Exams", active: true },
-  ]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pricing, setPricing] = useState({
+    basic: 1500,
+    standard: 2500,
+    premium: 4000,
+  });
 
-  const toggleSubject = (id: number) => {
-    setSubjects(subjects.map(s => s.id === id ? { ...s, active: !s.active } : s));
-  };
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      setLoading(true);
+      try {
+        // Fetch all subjects from database
+        const res = await adminFetch("/api/admin/subjects");
+        if (res.ok) {
+          const data = await res.json();
+          // Group by exam body and category for display
+          const subjectsWithInfo = await Promise.all(
+            data.map(async (subject: Subject) => {
+              // Get exam body name
+              const bodyRes = await adminFetch(`/api/admin/exam-bodies`);
+              const bodies = bodyRes.ok ? await bodyRes.json() : [];
+              const examBody = bodies.find((b: any) => b.id === subject.examBodyId);
+              
+              // Get category name
+              const catRes = await adminFetch(`/api/admin/tracks?examBodyId=${subject.examBodyId}`);
+              const categories = catRes.ok ? await catRes.json() : [];
+              const category = categories.find((c: any) => c.id === subject.categoryId);
+              
+              return {
+                ...subject,
+                examBodyName: examBody?.name || "Unknown",
+                categoryName: category?.name || "Unknown",
+              };
+            })
+          );
+          setSubjects(subjectsWithInfo);
+        }
+      } catch (err) {
+        console.error("Error fetching subjects:", err);
+        toast({
+          title: "Error",
+          description: "Failed to load subjects.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    void fetchSubjects();
+  }, [toast]);
 
   const handleSave = () => {
     toast({
@@ -62,38 +113,56 @@ export default function SystemSettings() {
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle>Subject Management</CardTitle>
-                    <CardDescription>Manage active subjects for WAEC, NECO, and JAMB.</CardDescription>
+                    <CardDescription>View all subjects in the system. To add/edit subjects, use the Question Bank.</CardDescription>
                   </div>
-                  <Button size="sm">
-                    <Plus className="mr-2 h-4 w-4" /> Add Subject
+                  <Button size="sm" onClick={() => setLocation("/admin/questions")}>
+                    <ExternalLink className="mr-2 h-4 w-4" /> Manage in Question Bank
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="rounded-md border divide-y">
-                  {subjects.map((subject) => (
-                    <div key={subject.id} className="flex items-center justify-between p-4">
-                      <div className="flex items-center gap-4">
-                        <div className="bg-primary/10 p-2 rounded">
-                          <BookOpen className="h-4 w-4 text-primary" />
+                {loading ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2" />
+                    <p className="text-muted-foreground">Loading subjects...</p>
+                  </div>
+                ) : subjects.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No subjects found. Add subjects in the Question Bank.
+                  </div>
+                ) : (
+                  <>
+                    <Alert className="mb-4">
+                      <AlertDescription>
+                        Subjects are managed in the Question Bank. Click "Manage in Question Bank" to add, edit, or delete subjects.
+                      </AlertDescription>
+                    </Alert>
+                    <div className="rounded-md border divide-y">
+                      {subjects.map((subject) => (
+                        <div key={subject.id} className="flex items-center justify-between p-4">
+                          <div className="flex items-center gap-4">
+                            <div className="bg-primary/10 p-2 rounded">
+                              <BookOpen className="h-4 w-4 text-primary" />
+                            </div>
+                            <div>
+                              <p className="font-medium">{subject.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {subject.examBodyName} • {subject.categoryName}
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => setLocation("/admin/questions")}
+                          >
+                            <Edit2 className="mr-2 h-4 w-4" /> Edit
+                          </Button>
                         </div>
-                        <div>
-                          <p className="font-medium">{subject.name}</p>
-                          <p className="text-xs text-muted-foreground">{subject.type}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground">{subject.active ? 'Active' : 'Inactive'}</span>
-                          <Switch checked={subject.active} onCheckedChange={() => toggleSubject(subject.id)} />
-                        </div>
-                        <Button variant="ghost" size="icon">
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -105,21 +174,28 @@ export default function SystemSettings() {
                 <CardDescription>Manage pricing for Basic, Standard, and Premium plans.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                <Alert>
+                  <AlertDescription>
+                    Pricing is currently configured in the backend. Contact a developer to update pricing values.
+                  </AlertDescription>
+                </Alert>
                 {[
-                  { name: "Basic Plan", current: "1500" },
-                  { name: "Standard Plan", current: "2500" },
-                  { name: "Premium Plan", current: "4000" },
-                ].map((plan, i) => (
-                  <div key={i} className="grid md:grid-cols-3 gap-4 items-end border-b pb-6 last:border-0 last:pb-0">
+                  { name: "Basic Plan", key: "basic", current: pricing.basic },
+                  { name: "Standard Plan", key: "standard", current: pricing.standard },
+                  { name: "Premium Plan", key: "premium", current: pricing.premium },
+                ].map((plan) => (
+                  <div key={plan.key} className="grid md:grid-cols-3 gap-4 items-end border-b pb-6 last:border-0 last:pb-0">
                     <div>
                       <Label>{plan.name} Price (NGN)</Label>
-                      <Input defaultValue={plan.current} className="mt-2" />
+                      <Input value={plan.current} disabled className="mt-2 bg-muted" />
                     </div>
                     <div>
                       <Label>Duration</Label>
-                      <Input defaultValue="30 Days" disabled className="mt-2 bg-muted" />
+                      <Input value="30 Days" disabled className="mt-2 bg-muted" />
                     </div>
-                    <Button variant="outline">Update {plan.name}</Button>
+                    <Button variant="outline" disabled>
+                      Update {plan.name}
+                    </Button>
                   </div>
                 ))}
               </CardContent>

@@ -1,0 +1,182 @@
+{
+  "meta": {
+    "objective": "Safely update pricing, feature limits, and access rules without breaking existing functionality.",
+    "confidence_requirement": ">=95%",
+    "non_breaking_mandate": true,
+    "assumption_policy": "No assumptions allowed. Ask before acting if uncertain.",
+    "change_scope": "Pricing, plan limits, feature access control, UI copy alignment",
+    "out_of_scope": [
+      "Refactoring unrelated code",
+      "Introducing new dependencies",
+      "Database destructive operations without approval"
+    ]
+  },
+
+  "pricing_updates": {
+    "currency": "NGN",
+    "plans": {
+      "basic": {
+        "price": 2000,
+        "billing_cycle": "monthly"
+      },
+      "standard": {
+        "price": 3500,
+        "billing_cycle": "monthly"
+      },
+      "premium": {
+        "price": 5000,
+        "billing_cycle": "monthly"
+      },
+      "lifetime": {
+        "price": 20000,
+        "billing_cycle": "one_time"
+      }
+    },
+    "rules": {
+      "do_not_change_existing_active_subscriptions": true,
+      "apply_new_prices_only_to_new_or_renewed_subscriptions": true
+    }
+  },
+
+  "plan_feature_definitions": {
+    "basic": {
+      "exam_access": {
+        "type": "single",
+        "allowed_values": ["WAEC", "JAMB"]
+      },
+      "practice_limits": {
+        "daily_tests": 1,
+        "monthly_tests": 30,
+        "retry_policy": "No retake within 24 hours"
+      },
+      "features": {
+        "topic_based_practice": false,
+        "detailed_explanations": false,
+        "analytics": "basic_score_only",
+        "test_history": 5,
+        "offline_access": false,
+        "pdf_reports": false
+      }
+    },
+
+    "standard": {
+      "exam_access": {
+        "type": "multiple",
+        "allowed_values": ["WAEC", "JAMB"]
+      },
+      "practice_limits": {
+        "daily_tests": 3,
+        "monthly_tests": 90,
+        "topic_practice_counts_toward_limit": true
+      },
+      "features": {
+        "topic_based_practice": true,
+        "detailed_explanations": true,
+        "analytics": "performance_trends_30_days",
+        "test_history": 30,
+        "offline_access": true,
+        "pdf_reports": false
+      }
+    },
+
+    "premium": {
+      "exam_access": {
+        "type": "multiple",
+        "allowed_values": ["WAEC", "JAMB"]
+      },
+      "practice_limits": {
+        "daily_tests": "unlimited",
+        "monthly_tests": "unlimited"
+      },
+      "features": {
+        "topic_based_practice": true,
+        "detailed_explanations": true,
+        "analytics": "advanced_with_readiness_scores",
+        "test_history": "lifetime",
+        "offline_access": true,
+        "pdf_reports": true
+      }
+    },
+
+    "lifetime": {
+      "inherits_from": "premium",
+      "expiration": "never",
+      "future_updates_included": true
+    }
+  },
+
+  "tutor_mode_policy": {
+    "visibility": "hidden_from_all_pricing_plans",
+    "access_method": "manual_enquiry_only",
+    "allowed_entry_points": [
+      "Contact Us page",
+      "Support email",
+      "Sales enquiry form"
+    ],
+    "explicit_rules": {
+      "must_not_be_assignable_via_subscription": true,
+      "must_not_be_toggleable_by_admin_without_record": true,
+      "must_require_manual_quote": true
+    },
+    "ui_requirements": {
+      "no_pricing_display": true,
+      "copy_example": "Tutor support is available on request. Contact us for a personalized quote."
+    }
+  },
+
+  "implementation_rules": {
+    "practice_limit_enforcement": {
+      "enforce_on": "submission",
+      "not_on": "test_start",
+      "storage_fields_required": [
+        "tests_used_today",
+        "tests_used_this_month",
+        "daily_limit",
+        "monthly_limit"
+      ]
+    },
+    "upgrade_experience": {
+      "show_remaining_attempts": true,
+      "on_limit_reached": {
+        "block_submission": true,
+        "show_upgrade_cta": true,
+        "do_not_lock_dashboard": true
+      }
+    }
+  },
+
+  "safety_checks": {
+    "before_any_change": [
+      "Confirm feature is currently used",
+      "Confirm no downstream dependency breaks",
+      "Confirm database fields exist or are added safely"
+    ],
+    "database_rules": {
+      "no_hard_deletes": true,
+      "no_data_loss": true,
+      "migrations_must_be_reversible": true
+    }
+  },
+
+  "validation_steps": {
+    "required_tests": [
+      "Basic user hits daily limit",
+      "Standard user hits monthly limit",
+      "Premium user has no limits",
+      "Tutor mode not accessible via subscription",
+      "Existing subscribers unaffected"
+    ],
+    "rollback_plan_required": true
+  },
+
+  "confidence_gate": {
+    "action_if_confidence_below_95_percent": "STOP_AND_ASK",
+    "log_uncertainties": true,
+    "no_silent_fixes": true
+  },
+
+  "final_instruction": {
+    "priority": "system_stability_over_feature_completion",
+    "success_definition": "All plans behave exactly as defined with zero regressions."
+  }
+}

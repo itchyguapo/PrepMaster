@@ -7,28 +7,187 @@ import {
   DollarSign, 
   Activity,
   ArrowUpRight,
-  UserCheck
+  UserCheck,
+  RefreshCw,
+  Building2
 } from "lucide-react";
+import { useLocation } from "wouter";
+import { useEffect, useState } from "react";
+import { adminFetch } from "@/lib/adminApi";
+
+type DashboardStats = {
+  totalRevenue: number;
+  revenueChange: number;
+  activeSubscriptions: number;
+  subscriptionsChange: number;
+  questionsInBank: number;
+  questionsChange: number;
+  activeTutors: number;
+  tutorsChange: number;
+  subscriptionGrowth: number[];
+  recentActivity: Array<{
+    user: string;
+    action: string;
+    time: string;
+  }>;
+  pendingInquiries?: number;
+};
 
 export default function AdminDashboard() {
+  const [, setLocation] = useLocation();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStats = async (showLoading = false) => {
+    if (showLoading) setRefreshing(true);
+    setError(null);
+    try {
+      console.log("[ADMIN DASHBOARD] Fetching stats...");
+      const res = await adminFetch("/api/admin/stats");
+      console.log("[ADMIN DASHBOARD] Response status:", res.status);
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("[ADMIN DASHBOARD] Stats received:", data);
+        setStats(data);
+        setError(null);
+      } else {
+        let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
+        let errorData: any = null;
+        
+        try {
+          const contentType = res.headers.get("content-type");
+          if (contentType?.includes("application/json")) {
+            errorData = await res.json();
+            errorMessage = errorData.message || errorData.error || errorMessage;
+            
+            // Add help message if available
+            if (errorData.help) {
+              errorMessage += `\n\n💡 ${errorData.help}`;
+            }
+            
+            // Add debug info in development
+            if (errorData.debug && process.env.NODE_ENV === "development") {
+              console.error("[ADMIN DASHBOARD] Debug info:", errorData.debug);
+              errorMessage += `\n\nDebug: ${JSON.stringify(errorData.debug, null, 2)}`;
+            }
+          } else {
+            const errorText = await res.text().catch(() => "");
+            errorMessage = errorText || errorMessage;
+          }
+        } catch (parseError) {
+          console.error("[ADMIN DASHBOARD] Error parsing response:", parseError);
+          const errorText = await res.text().catch(() => "");
+          errorMessage = errorText || errorMessage;
+        }
+        
+        console.error("[ADMIN DASHBOARD] Error response:", errorData || errorMessage);
+        setError(errorMessage);
+        setStats(null);
+        
+        // If 403, suggest checking diagnostic endpoint
+        if (res.status === 403) {
+          console.warn("[ADMIN DASHBOARD] 💡 Tip: Check /api/admin/diagnostic?supabaseId=YOUR_ID for detailed admin status");
+        }
+      }
+    } catch (err: any) {
+      console.error("[ADMIN DASHBOARD] Exception:", err);
+      setError(err.message || "Failed to connect to server. Please check your connection and try again.");
+      setStats(null);
+    } finally {
+      if (showLoading) setRefreshing(false);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchStats();
+    
+    // Refresh stats every 30 seconds
+    const interval = setInterval(() => {
+      void fetchStats();
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="space-y-8">
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">Loading dashboard stats...</p>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <AdminLayout>
+        <div className="space-y-8">
+          <div className="text-center py-12 space-y-4">
+            <p className="text-muted-foreground">Failed to load dashboard stats.</p>
+            {error && (
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 max-w-md mx-auto space-y-2">
+                <p className="text-sm text-destructive font-medium">Error:</p>
+                <p className="text-sm text-muted-foreground">{error}</p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Check the browser console (F12) and server logs for more details.
+                </p>
+              </div>
+            )}
+            <Button onClick={() => void fetchStats(true)} variant="outline">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Retry
+            </Button>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-NG", {
+      style: "currency",
+      currency: "NGN",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
+
   return (
     <AdminLayout>
       <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold font-display">System Overview</h1>
-          <p className="text-muted-foreground">Welcome back, Administrator.</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold font-display">System Overview</h1>
+            <p className="text-muted-foreground">Welcome back, Administrator.</p>
+          </div>
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => void fetchStats(true)}
+            disabled={refreshing}
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+          </Button>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₦2,450,000</div>
-              <p className="text-xs text-muted-foreground">+20.1% from last month</p>
+              <div className="text-2xl font-bold">{formatCurrency(stats.totalRevenue)}</div>
+              <p className="text-xs text-muted-foreground">
+                {stats.revenueChange >= 0 ? "+" : ""}{stats.revenueChange.toFixed(1)}% from last month
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -37,8 +196,10 @@ export default function AdminDashboard() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">+2350</div>
-              <p className="text-xs text-muted-foreground">+180 new this week</p>
+              <div className="text-2xl font-bold">+{stats.activeSubscriptions}</div>
+              <p className="text-xs text-muted-foreground">
+                +{stats.subscriptionsChange} new this week
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -47,8 +208,10 @@ export default function AdminDashboard() {
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">45,231</div>
-              <p className="text-xs text-muted-foreground">+1,200 added recently</p>
+              <div className="text-2xl font-bold">{stats.questionsInBank.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground">
+                +{stats.questionsChange} added recently
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -57,13 +220,30 @@ export default function AdminDashboard() {
               <UserCheck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">124</div>
-              <p className="text-xs text-muted-foreground">Managing 450 student groups</p>
+              <div className="text-2xl font-bold">{stats.activeTutors}</div>
+              <p className="text-xs text-muted-foreground">
+                {stats.tutorsChange > 0 ? `+${stats.tutorsChange} new` : "No changes"} this week
+              </p>
+            </CardContent>
+          </Card>
+          <Card 
+            className="cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => setLocation("/admin/tutor-inquiries")}
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pending Inquiries</CardTitle>
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.pendingInquiries || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                Tutor & school quotes
+              </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Charts Section Mockup */}
+        {/* Charts Section */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
           <Card className="col-span-4">
             <CardHeader>
@@ -71,10 +251,10 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent className="pl-2">
               <div className="h-[200px] flex items-end justify-between gap-2 px-4">
-                {[40, 30, 45, 60, 55, 70, 85].map((h, i) => (
-                   <div key={i} className="w-full bg-primary/20 hover:bg-primary/30 rounded-t-sm transition-all relative group" style={{ height: `${h}%` }}>
+                {stats.subscriptionGrowth.map((h, i) => (
+                   <div key={i} className="w-full bg-primary/20 hover:bg-primary/30 rounded-t-sm transition-all relative group" style={{ height: `${Math.max(5, h)}%` }}>
                       <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-popover text-popover-foreground text-xs p-1 rounded border shadow-sm">
-                        {h * 10} Users
+                        {h} Users
                       </div>
                    </div>
                 ))}
@@ -93,21 +273,20 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-8">
-                {[
-                  { user: "Admin User", action: "Uploaded WAEC 2023 Physics", time: "2 mins ago" },
-                  { user: "System AI", action: "Flagged 5 questions for review", time: "15 mins ago" },
-                  { user: "Tutor Sarah", action: "Created 'SS3 Math Prep' group", time: "1 hour ago" },
-                  { user: "New User", action: "Purchased Premium Plan", time: "2 hours ago" },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium leading-none">{item.action}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.user} • {item.time}
-                      </p>
+                {stats.recentActivity.length > 0 ? (
+                  stats.recentActivity.map((item, i) => (
+                    <div key={i} className="flex items-center">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium leading-none">{item.action}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.user} • {item.time}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">No recent activity</p>
+                )}
               </div>
             </CardContent>
           </Card>

@@ -17,22 +17,18 @@ export function Navbar() {
   return (
     <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-        <Link href="/">
-          <a className="flex items-center gap-2 font-display font-bold text-2xl text-primary tracking-tight">
-            <div className="bg-primary/10 p-1.5 rounded-lg">
-              <BookOpen className="h-6 w-6 text-primary" />
-            </div>
-            PrepMaster<span className="text-secondary">NG</span>
-          </a>
+        <Link href="/" className="flex items-center gap-2 font-display font-bold text-2xl text-primary tracking-tight">
+          <div className="bg-primary/10 p-1.5 rounded-lg">
+            <BookOpen className="h-6 w-6 text-primary" />
+          </div>
+          PrepMaster<span className="text-secondary">NG</span>
         </Link>
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-6">
           {links.map((link) => (
-            <Link key={link.href} href={link.href}>
-              <a className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
-                {link.label}
-              </a>
+            <Link key={link.href} href={link.href} className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
+              {link.label}
             </Link>
           ))}
           
@@ -40,15 +36,11 @@ export function Navbar() {
           
           {/* Prototype Links for Reviewers */}
           <div className="flex items-center gap-2">
-             <Link href="/tutor">
-              <a className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1">
-                <GraduationCap className="h-3 w-3" /> Tutor
-              </a>
+             <Link href="/tutor/login" className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1">
+                <GraduationCap className="h-3 w-3" /> Tutor Login
             </Link>
-            <Link href="/admin">
-              <a className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1">
+            <Link href="/admin" className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1">
                 <Shield className="h-3 w-3" /> Admin
-              </a>
             </Link>
           </div>
 
@@ -77,21 +69,15 @@ export function Navbar() {
             <div className="flex flex-col gap-8 mt-8">
               <div className="flex flex-col gap-4">
                 {links.map((link) => (
-                  <Link key={link.href} href={link.href}>
-                    <a className="text-lg font-medium hover:text-primary transition-colors" onClick={() => setIsOpen(false)}>
-                      {link.label}
-                    </a>
+                  <Link key={link.href} href={link.href} className="text-lg font-medium hover:text-primary transition-colors" onClick={() => setIsOpen(false)}>
+                    {link.label}
                   </Link>
                 ))}
-                <Link href="/admin">
-                    <a className="text-lg font-medium hover:text-primary transition-colors flex items-center gap-2" onClick={() => setIsOpen(false)}>
+                <Link href="/admin" className="text-lg font-medium hover:text-primary transition-colors flex items-center gap-2" onClick={() => setIsOpen(false)}>
                       <Shield className="h-4 w-4" /> Admin Portal
-                    </a>
                 </Link>
-                <Link href="/tutor">
-                    <a className="text-lg font-medium hover:text-primary transition-colors flex items-center gap-2" onClick={() => setIsOpen(false)}>
-                      <GraduationCap className="h-4 w-4" /> Tutor Portal
-                    </a>
+                <Link href="/tutor/login" className="text-lg font-medium hover:text-primary transition-colors flex items-center gap-2" onClick={() => setIsOpen(false)}>
+                      <GraduationCap className="h-4 w-4" /> Tutor Login
                 </Link>
               </div>
               <div className="flex flex-col gap-4">

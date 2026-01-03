@@ -1,71 +1,118 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
+import { BookOpen } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
-// Mock Data - simulating the "Ugly" but functional official interface
-const questions = [
-  {
-    id: 1,
-    text: "Evaluate ∫(2x + 1) dx from x = 1 to x = 2.",
-    options: [
-      { id: "A", text: "4" },
-      { id: "B", text: "5" },
-      { id: "C", text: "6" },
-      { id: "D", text: "7" },
-    ],
-    subject: "Mathematics",
-  },
-  {
-    id: 2,
-    text: "The term 'utopia' refers to:",
-    options: [
-      { id: "A", text: "A perfect society" },
-      { id: "B", text: "A chaotic world" },
-      { id: "C", text: "A religious sect" },
-      { id: "D", text: "A political party" },
-    ],
-    subject: "Use of English",
-  },
-   {
-    id: 3,
-    text: "In physics, power is defined as:",
-    options: [
-      { id: "A", text: "Force times distance" },
-      { id: "B", text: "Work done per unit time" },
-      { id: "C", text: "Mass times acceleration" },
-      { id: "D", text: "Energy times time" },
-    ],
-    subject: "Physics",
-  },
-  {
-    id: 4,
-    text: "Which of these is an example of an invertebrate?",
-    options: [
-      { id: "A", text: "Tilapia" },
-      { id: "B", text: "Toad" },
-      { id: "C", text: "Earthworm" },
-      { id: "D", text: "Lizard" },
-    ],
-    subject: "Biology",
-  },
-  {
-    id: 5,
-    text: "The capital of Zamfara State is:",
-    options: [
-      { id: "A", text: "Gusau" },
-      { id: "B", text: "Birnin Kebbi" },
-      { id: "C", text: "Dutse" },
-      { id: "D", text: "Sokoto" },
-    ],
-    subject: "Civic Education",
-  }
-];
+type Question = {
+  id: string;
+  text: string;
+  options: { id: string; text: string }[];
+  subject: string;
+  year?: string;
+};
 
 export default function ExamSimulation() {
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQIndex, setCurrentQIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [timeLeft, setTimeLeft] = useState(7200); // 2 hours
   const [, setLocation] = useLocation();
+  const [loading, setLoading] = useState(true);
+  const [examId, setExamId] = useState<string | null>(null);
+  const [examTitle, setExamTitle] = useState<string>("JAMB CBT 2025");
+  const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+
+  // Get examId from URL query parameter
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("examId");
+    setExamId(id);
+  }, []);
+
+  // Fetch live questions
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      if (!examId) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/questions?examId=${examId}`);
+        if (res.ok) {
+          const data = await res.json();
+          
+          // Format questions to ensure options are properly structured
+          const formattedQuestions = (data.questions || []).map((q: any) => {
+            let options = q.options || [];
+            if (!Array.isArray(options)) {
+              try {
+                options = typeof options === "string" ? JSON.parse(options) : [];
+              } catch {
+                options = [];
+              }
+            }
+            
+            // Ensure each option has id and text
+            const formattedOptions = options.map((opt: any, index: number) => {
+              if (typeof opt === "string") {
+                return { id: String.fromCharCode(65 + index), text: opt };
+              }
+              if (opt && typeof opt === "object") {
+                return {
+                  id: opt.id || String.fromCharCode(65 + index),
+                  text: opt.text || opt.content || String(opt) || `Option ${String.fromCharCode(65 + index)}`,
+                };
+              }
+              return {
+                id: String.fromCharCode(65 + index),
+                text: String(opt) || `Option ${String.fromCharCode(65 + index)}`,
+              };
+            });
+            
+            return {
+              ...q,
+              options: formattedOptions,
+            };
+          });
+          
+          setQuestions(formattedQuestions);
+          setExamTitle(data.title || "JAMB CBT 2025");
+        } else {
+          console.error("Failed to load questions");
+        }
+      } catch (err) {
+        console.error("Error fetching questions:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    void fetchQuestions();
+  }, [examId]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#f0f0f0] flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-lg font-bold text-[#006633]">Loading questions...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!questions.length) {
+    return (
+      <div className="min-h-screen bg-[#f0f0f0] flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-lg font-bold text-[#006633]">No questions available.</div>
+          <Button onClick={() => setLocation("/dashboard")} className="mt-4">
+            Back to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const currentQuestion = questions[currentQIndex];
 
@@ -84,13 +131,13 @@ export default function ExamSimulation() {
   };
 
   const handleSelectOption = (value: string) => {
-    setAnswers(prev => ({ ...prev, [currentQuestion.id]: value }));
+    if (currentQuestion) {
+      setAnswers(prev => ({ ...prev, [currentQuestion.id]: value }));
+    }
   };
 
   const handleSubmit = () => {
-      if(window.confirm("Are you sure you want to submit? You cannot return to the exam.")){
-           setLocation("/results");
-      }
+    setLocation("/results");
   }
 
   // Styles replicating the "Official" look - purposefully slightly dated/utilitarian
@@ -98,7 +145,14 @@ export default function ExamSimulation() {
     <div className="min-h-screen bg-[#f0f0f0] font-sans text-sm flex flex-col h-screen select-none">
       {/* Top Bar - Official Green Header */}
       <header className="h-12 bg-[#006633] text-white flex items-center justify-between px-4 shadow-md shrink-0">
-        <div className="font-bold text-lg tracking-wide">JAMB CBT 2025</div>
+        <div className="flex items-center gap-4">
+          <Link href="/" className="flex items-center gap-2 font-display font-bold text-lg hover:opacity-80 transition-opacity">
+            <BookOpen className="h-5 w-5" />
+            PrepMaster
+          </Link>
+          <div className="h-6 w-px bg-white/30" />
+          <div className="font-bold text-lg tracking-wide">{examTitle}</div>
+        </div>
         <div className="flex items-center gap-4">
           <div className="bg-black/20 px-3 py-1 rounded text-yellow-300 font-mono font-bold text-lg">
             {formatTime(timeLeft)}
@@ -164,12 +218,33 @@ export default function ExamSimulation() {
                     NEXT
                  </button>
              </div>
-             <button 
-                onClick={handleSubmit}
-                className="px-6 py-2 bg-red-600 text-white font-bold rounded shadow hover:bg-red-700"
-             >
-                SUBMIT EXAM
-             </button>
+             <AlertDialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
+               <AlertDialogTrigger asChild>
+                 <button 
+                   onClick={() => setSubmitDialogOpen(true)}
+                   className="px-6 py-2 bg-red-600 text-white font-bold rounded shadow hover:bg-red-700"
+                 >
+                   SUBMIT EXAM
+                 </button>
+               </AlertDialogTrigger>
+               <AlertDialogContent>
+                 <AlertDialogHeader>
+                   <AlertDialogTitle>Submit Exam?</AlertDialogTitle>
+                   <AlertDialogDescription>
+                     Are you sure you want to submit? You cannot return to the exam once submitted.
+                   </AlertDialogDescription>
+                 </AlertDialogHeader>
+                 <AlertDialogFooter>
+                   <AlertDialogCancel onClick={() => setSubmitDialogOpen(false)}>Review More</AlertDialogCancel>
+                   <AlertDialogAction 
+                     onClick={handleSubmit}
+                     className="bg-red-600 text-white hover:bg-red-700"
+                   >
+                     Yes, Submit Exam
+                   </AlertDialogAction>
+                 </AlertDialogFooter>
+               </AlertDialogContent>
+             </AlertDialog>
           </div>
         </main>
 

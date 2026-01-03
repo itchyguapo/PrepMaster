@@ -2,6 +2,7 @@ import { AdminLayout } from "@/components/layout/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
@@ -11,7 +12,12 @@ import {
   UserX, 
   UserCheck, 
   Mail,
-  Shield
+  Shield,
+  Edit,
+  Loader2,
+  Download,
+  CheckSquare,
+  Square
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -21,34 +27,257 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { adminFetch } from "@/lib/adminApi";
 
-const initialUsers = [
-  { id: 1, name: "Chidimma Okonkwo", email: "chidimma@example.com", role: "Student", plan: "Premium", status: "Active", joined: "2 days ago" },
-  { id: 2, name: "Mr. Adebayo", email: "adebayo.tutor@example.com", role: "Tutor", plan: "N/A", status: "Active", joined: "1 month ago" },
-  { id: 3, name: "Emmanuel Kalu", email: "emmanuel.k@example.com", role: "Student", plan: "Basic", status: "Inactive", joined: "3 months ago" },
-  { id: 4, name: "Sarah Johnson", email: "sarah.j@example.com", role: "Student", plan: "Standard", status: "Active", joined: "1 week ago" },
-  { id: 5, name: "Admin User", email: "admin@prepmaster.ng", role: "Admin", plan: "N/A", status: "Active", joined: "1 year ago" },
-];
+type User = {
+  id: string | number;
+  name: string;
+  email: string;
+  role: string;
+  roleValue?: string;
+  plan: string;
+  planValue?: string;
+  status: string;
+  joined: string;
+};
 
 export default function UserManagement() {
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState({ role: "student", plan: "basic", subscriptionStatus: "active" });
+  const [saving, setSaving] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState<Set<string | number>>(new Set());
+  const [planFilter, setPlanFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
   const { toast } = useToast();
 
-  const handleStatusChange = (userId: number, newStatus: string) => {
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await adminFetch("/api/admin/users");
+        if (res.ok) {
+          const data = await res.json();
+          setUsers(data);
+        } else {
+          toast({ title: "Error", description: "Failed to load users.", variant: "destructive" });
+        }
+      } catch (err) {
+        console.error("Error fetching users:", err);
+        toast({ title: "Error", description: "Failed to load users.", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    };
+    void fetchUsers();
+  }, [toast]);
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user);
+    setEditFormData({
+      role: user.roleValue || "student",
+      plan: user.planValue || "basic",
+      subscriptionStatus: user.status === "Active" ? "active" : "inactive",
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveUser = async () => {
+    if (!editingUser) return;
+
+    setSaving(true);
+    try {
+      const res = await adminFetch(`/api/admin/users/${editingUser.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editFormData),
+      });
+
+      if (res.ok) {
+        toast({
+          title: "Success",
+          description: "User updated successfully.",
+        });
+        setIsEditDialogOpen(false);
+        setEditingUser(null);
+        
+        // Refresh users list
+        const usersRes = await adminFetch("/api/admin/users");
+        if (usersRes.ok) {
+          const data = await usersRes.json();
+          setUsers(data);
+        }
+      } else {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to update user");
+      }
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to update user.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleStatusChange = (userId: string | number, newStatus: string) => {
     setUsers(users.map(u => u.id === userId ? { ...u, status: newStatus } : u));
     toast({
       title: "User Status Updated",
       description: `User has been marked as ${newStatus}.`,
     });
+    // Note: In production, you'd make an API call here to update the user status
   };
 
-  const filteredUsers = users.filter(u => 
-    u.name.toLowerCase().includes(search.toLowerCase()) || 
-    u.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleExport = async (format: "csv" | "json" = "csv") => {
+    try {
+      const params = new URLSearchParams({
+        format,
+        ...(planFilter !== "all" && { plan: planFilter }),
+        ...(statusFilter !== "all" && { status: statusFilter }),
+        ...(roleFilter !== "all" && { role: roleFilter }),
+        ...(search && { search }),
+      });
+
+      const res = await adminFetch(`/api/admin/users/export?${params.toString()}`);
+      if (res.ok) {
+        if (format === "csv") {
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `users-export-${new Date().toISOString().split("T")[0]}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        } else {
+          const data = await res.json();
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `users-export-${new Date().toISOString().split("T")[0]}.json`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }
+        toast({
+          title: "Export Successful",
+          description: `Users exported as ${format.toUpperCase()}.`,
+        });
+      } else {
+        throw new Error("Export failed");
+      }
+    } catch (err) {
+      console.error("Error exporting users:", err);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export users.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleBulkUpdate = async (role?: string, plan?: string, subscriptionStatus?: string) => {
+    if (selectedUsers.size === 0) {
+      toast({
+        title: "No Users Selected",
+        description: "Please select at least one user.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await adminFetch("/api/admin/users/bulk-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userIds: Array.from(selectedUsers),
+          ...(role && { role }),
+          ...(plan && { plan }),
+          ...(subscriptionStatus && { subscriptionStatus }),
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        toast({
+          title: "Bulk Update Successful",
+          description: data.message,
+        });
+        setSelectedUsers(new Set());
+        // Refresh users list
+        const usersRes = await adminFetch("/api/admin/users");
+        if (usersRes.ok) {
+          const userData = await usersRes.json();
+          setUsers(userData);
+        }
+      } else {
+        throw new Error("Bulk update failed");
+      }
+    } catch (err: any) {
+      toast({
+        title: "Bulk Update Failed",
+        description: err.message || "Failed to update users.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleUserSelection = (userId: string | number) => {
+    const newSelected = new Set(selectedUsers);
+    if (newSelected.has(userId)) {
+      newSelected.delete(userId);
+    } else {
+      newSelected.add(userId);
+    }
+    setSelectedUsers(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUsers.size === filteredUsers.length) {
+      setSelectedUsers(new Set());
+    } else {
+      setSelectedUsers(new Set(filteredUsers.map(u => u.id)));
+    }
+  };
+
+  const filteredUsers = users.filter(u => {
+    const matchesSearch = u.name.toLowerCase().includes(search.toLowerCase()) || 
+      u.email.toLowerCase().includes(search.toLowerCase());
+    const matchesPlan = planFilter === "all" || u.planValue === planFilter;
+    const matchesStatus = statusFilter === "all" || u.status.toLowerCase() === statusFilter.toLowerCase();
+    const matchesRole = roleFilter === "all" || u.roleValue === roleFilter;
+    return matchesSearch && matchesPlan && matchesStatus && matchesRole;
+  });
 
   return (
     <AdminLayout>
@@ -58,9 +287,42 @@ export default function UserManagement() {
             <h1 className="text-3xl font-bold font-display">User Management</h1>
             <p className="text-muted-foreground">Manage students, tutors, and administrators.</p>
           </div>
-          <Button>
-            <Mail className="mr-2 h-4 w-4" /> Send Broadcast Email
-          </Button>
+          <div className="flex gap-2">
+            {selectedUsers.size > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
+                    Bulk Actions ({selectedUsers.size})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuLabel>Update Role</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => handleBulkUpdate("student")}>Set as Student</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkUpdate("tutor")}>Set as Tutor</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkUpdate("admin")}>Set as Admin</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Update Plan</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => handleBulkUpdate(undefined, "basic")}>Set to Basic</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkUpdate(undefined, "standard")}>Set to Standard</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkUpdate(undefined, "premium")}>Set to Premium</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Download className="mr-2 h-4 w-4" /> Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => handleExport("csv")}>Export as CSV</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("json")}>Export as JSON</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button>
+              <Mail className="mr-2 h-4 w-4" /> Send Broadcast Email
+            </Button>
+          </div>
         </div>
 
         <Card>
@@ -76,28 +338,61 @@ export default function UserManagement() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="icon">
-                  <Filter className="h-4 w-4" />
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline">Filter Role</Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem>All Users</DropdownMenuItem>
-                    <DropdownMenuItem>Students</DropdownMenuItem>
-                    <DropdownMenuItem>Tutors</DropdownMenuItem>
-                    <DropdownMenuItem>Admins</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Select value={planFilter} onValueChange={setPlanFilter}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Filter by Plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Plans</SelectItem>
+                    <SelectItem value="basic">Basic</SelectItem>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="premium">Premium</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Filter by Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={roleFilter} onValueChange={setRoleFilter}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Filter by Role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Roles</SelectItem>
+                    <SelectItem value="student">Student</SelectItem>
+                    <SelectItem value="tutor">Tutor</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardHeader>
           <CardContent>
+            {loading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading users...</div>
+            ) : (
             <div className="rounded-md border">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50">
+                    <th className="h-12 px-4 text-left font-medium text-muted-foreground w-12">
+                      <button
+                        onClick={toggleSelectAll}
+                        className="flex items-center justify-center"
+                      >
+                        {selectedUsers.size === filteredUsers.length && filteredUsers.length > 0 ? (
+                          <CheckSquare className="h-4 w-4" />
+                        ) : (
+                          <Square className="h-4 w-4" />
+                        )}
+                      </button>
+                    </th>
                     <th className="h-12 px-4 text-left font-medium text-muted-foreground">User</th>
                     <th className="h-12 px-4 text-left font-medium text-muted-foreground">Role</th>
                     <th className="h-12 px-4 text-left font-medium text-muted-foreground">Plan</th>
@@ -109,6 +404,18 @@ export default function UserManagement() {
                 <tbody>
                   {filteredUsers.map((user) => (
                     <tr key={user.id} className="border-b hover:bg-muted/50 transition-colors">
+                      <td className="p-4">
+                        <button
+                          onClick={() => toggleUserSelection(user.id)}
+                          className="flex items-center justify-center"
+                        >
+                          {selectedUsers.has(user.id) ? (
+                            <CheckSquare className="h-4 w-4 text-primary" />
+                          ) : (
+                            <Square className="h-4 w-4" />
+                          )}
+                        </button>
+                      </td>
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-9 w-9">
@@ -123,14 +430,17 @@ export default function UserManagement() {
                       </td>
                       <td className="p-4">
                         <div className="flex items-center gap-2">
-                          {user.role === 'Admin' && <Shield className="h-3 w-3 text-primary" />}
-                          <span>{user.role}</span>
+                          {(user.role === 'Admin' || user.roleValue === 'admin') && <Shield className="h-3 w-3 text-primary" />}
+                          <Badge variant={user.role === 'Admin' ? 'default' : user.role === 'Tutor' ? 'secondary' : 'outline'}>
+                            {user.role}
+                          </Badge>
                         </div>
                       </td>
                       <td className="p-4">
                         {user.plan !== 'N/A' && (
                           <Badge variant="outline" className={
-                            user.plan === 'Premium' ? 'border-primary text-primary bg-primary/5' : ''
+                            user.plan === 'Premium' ? 'border-primary text-primary bg-primary/5' : 
+                            user.plan === 'Standard' ? 'border-blue-500 text-blue-600 bg-blue-50' : ''
                           }>
                             {user.plan}
                           </Badge>
@@ -153,8 +463,9 @@ export default function UserManagement() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem>View Profile</DropdownMenuItem>
-                            <DropdownMenuItem>Edit Subscription</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                              <Edit className="mr-2 h-4 w-4" /> Edit User
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {user.status === 'Active' ? (
                               <DropdownMenuItem className="text-destructive" onClick={() => handleStatusChange(user.id, 'Suspended')}>
@@ -173,8 +484,90 @@ export default function UserManagement() {
                 </tbody>
               </table>
             </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* Edit User Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit User</DialogTitle>
+              <DialogDescription>
+                Update user role and subscription plan for {editingUser?.name}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="role">Role</Label>
+                <Select
+                  value={editFormData.role}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, role: value })}
+                >
+                  <SelectTrigger id="role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="student">Student</SelectItem>
+                    <SelectItem value="tutor">Tutor</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="plan">Subscription Plan</Label>
+                <Select
+                  value={editFormData.plan}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, plan: value })}
+                >
+                  <SelectTrigger id="plan">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="basic">Basic</SelectItem>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="premium">Premium</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="status">Subscription Status</Label>
+                <Select
+                  value={editFormData.subscriptionStatus}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, subscriptionStatus: value })}
+                >
+                  <SelectTrigger id="status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectItem value="expired">Expired</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsEditDialogOpen(false)}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSaveUser} disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );
