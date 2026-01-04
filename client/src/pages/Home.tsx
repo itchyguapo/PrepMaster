@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check, ArrowRight, Brain, Clock, BarChart, ShieldCheck, BookOpen, Users, Target, Zap, Download, Award, TrendingUp, FileText, Video, Smartphone } from "lucide-react";
-import heroImage from "@assets/generated_images/students_studying_on_laptops_in_library.png";
+import heroImage from "@assets/images/hero-bg.png";
 import { Link } from "wouter";
 
 export default function Home() {
@@ -60,13 +60,13 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            
+
             <div className="relative animate-in fade-in slide-in-from-right-8 duration-1000 delay-200">
               <div className="absolute -inset-4 bg-gradient-to-r from-primary to-secondary opacity-20 blur-3xl rounded-[3rem]" />
               <div className="relative rounded-[2rem] overflow-hidden border border-border shadow-2xl">
-                <img 
-                  src={heroImage} 
-                  alt="Students studying" 
+                <img
+                  src={heroImage}
+                  alt="Students studying"
                   className="w-full h-full object-cover scale-105 hover:scale-100 transition-transform duration-700"
                 />
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-8 text-white">
@@ -81,7 +81,7 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              
+
               {/* Floating Element */}
               <Card className="absolute -bottom-8 -left-8 w-72 shadow-xl border-primary/10 animate-bounce duration-[3000ms]">
                 <CardContent className="p-4 flex items-center gap-4">
