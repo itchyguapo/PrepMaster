@@ -12,9 +12,15 @@ export const users = pgTable("users", {
   supabaseId: varchar("supabase_id").unique(), // Supabase auth user ID
   emailConfirmed: boolean("email_confirmed").default(false), // Email confirmation status
   role: text("role", { enum: ["student", "tutor", "admin"] }).default("student"),
-  subscriptionStatus: text("subscription_status", { enum: ["basic", "premium", "expired"] }).default("basic"),
+  subscriptionStatus: text("subscription_status", { enum: ["basic", "standard", "premium", "expired"] }).default("basic"),
+  dailyQuotaUsed: integer("daily_quota_used").default(0),
+  lastQuotaReset: timestamp("last_quota_reset", { withTimezone: true }),
+  activeGeneratedExams: integer("active_generated_exams").default(0), // Cached count
   subscriptionExpiresAt: timestamp("subscription_expires_at", { withTimezone: true }),
   preferredExamBody: text("preferred_exam_body"), // For Basic plan: WAEC or JAMB (user chooses one)
+  isBanned: boolean("is_banned").default(false), // Admin can ban users
+  bannedAt: timestamp("banned_at", { withTimezone: true }), // When user was banned
+  bannedReason: text("banned_reason"), // Reason for ban
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
@@ -739,3 +745,17 @@ export const userStats = pgTable("user_stats", {
 export const insertUserStatsSchema = createInsertSchema(userStats);
 export type InsertUserStats = z.infer<typeof insertUserStatsSchema>;
 export type UserStats = typeof userStats.$inferSelect;
+
+// Offline Downloads tracking
+export const downloads = pgTable("downloads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  examId: varchar("exam_id").notNull().references(() => exams.id, { onDelete: "cascade" }),
+  downloadedAt: timestamp("downloaded_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  uniqueUserDownload: sql`UNIQUE(${table.userId}, ${table.examId})`
+}));
+
+export const insertDownloadSchema = createInsertSchema(downloads);
+export type InsertDownload = z.infer<typeof insertDownloadSchema>;
+export type Download = typeof downloads.$inferSelect;

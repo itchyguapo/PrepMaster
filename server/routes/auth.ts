@@ -4,6 +4,7 @@ import { db } from "../db";
 import { users, subscriptions, attempts } from "@shared/schema";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { isAdminEmail, normalizeEmail } from "../utils/adminEmails";
+import { ExamLimitService, TIER_LIMITS } from "../services/ExamLimitService";
 
 const router = Router();
 
@@ -11,7 +12,7 @@ const router = Router();
 router.get("/subscription", async (req: Request, res: Response) => {
   try {
     const { userId } = req.query;
-    
+
     if (!userId) {
       return res.status(400).json({ message: "userId is required" });
     }
@@ -26,7 +27,7 @@ router.get("/subscription", async (req: Request, res: Response) => {
     if (userRecords.length === 0) {
       // User doesn't exist in our DB yet, return basic status
       // Note: For tutors, they should have been created via sync-user endpoint first
-      return res.json({ 
+      return res.json({
         status: "basic",
         plan: "basic",
         isActive: false,
@@ -92,7 +93,7 @@ router.get("/subscription", async (req: Request, res: Response) => {
     // Tutor mode is only for users with role="tutor" (set via custom quotes), NOT for premium students
     const canAccessTutorMode = user.role === "tutor";
 
-    return res.json({ 
+    return res.json({
       status: isActive && (plan === "standard" || plan === "premium") ? "premium" : "basic",
       plan,
       isActive,
@@ -111,7 +112,7 @@ router.get("/subscription", async (req: Request, res: Response) => {
 router.post("/sync-user", userSyncLimiter, async (req: Request, res: Response) => {
   try {
     const { supabaseId, email, phone } = req.body;
-    
+
     if (!supabaseId) {
       return res.status(400).json({ message: "supabaseId is required" });
     }
@@ -134,24 +135,27 @@ router.post("/sync-user", userSyncLimiter, async (req: Request, res: Response) =
         phone: phone || existingUsers[0].phone,
         updatedAt: new Date(),
       };
-      
+
       // Set role to admin if email is in whitelist, or remove admin role if not
       if (isAdmin) {
         updateData.role = "admin";
       }
-      
+
       const [updated] = await db
         .update(users)
         .set(updateData)
         .where(eq(users.supabaseId, supabaseId))
         .returning();
 
+      console.log(`[USER SYNC] ✅ User synced: ${updated.email}`);
+      console.log(`[USER SYNC]   Role: ${updated.role || 'student'}, Plan: ${updated.subscriptionStatus || 'basic'}`);
+
       return res.json(updated);
     } else {
       // Create new user - ensure username is unique
       let username = email?.split("@")[0] || `user_${supabaseId.slice(0, 8)}`;
       let attempts = 0;
-      
+
       // Check if username exists and make it unique if needed
       while (attempts < 10) {
         const existing = await db
@@ -159,7 +163,7 @@ router.post("/sync-user", userSyncLimiter, async (req: Request, res: Response) =
           .from(users)
           .where(eq(users.username, username))
           .limit(1);
-        
+
         if (existing.length === 0) break;
         username = `${username}_${Math.floor(Math.random() * 1000)}`;
         attempts++;
@@ -177,7 +181,7 @@ router.post("/sync-user", userSyncLimiter, async (req: Request, res: Response) =
           subscriptionStatus: "basic",
         })
         .returning();
-      
+
       // Create default basic subscription for new user
       await db.insert(subscriptions).values({
         userId: newUser.id,
@@ -197,7 +201,7 @@ router.post("/sync-user", userSyncLimiter, async (req: Request, res: Response) =
 router.get("/me", async (req: Request, res: Response) => {
   try {
     const { supabaseId } = req.query;
-    
+
     if (!supabaseId) {
       return res.status(400).json({ message: "supabaseId is required" });
     }
@@ -213,11 +217,11 @@ router.get("/me", async (req: Request, res: Response) => {
     }
 
     const user = userRecords[0];
-    
+
     // Check if user email is in admin whitelist and update role if needed
     const userEmail = normalizeEmail(user.email);
     const isInWhitelist = isAdminEmail(userEmail);
-    
+
     // If user is in whitelist but role is not set to admin, update it
     if (isInWhitelist && user.role !== "admin") {
       await db
@@ -227,7 +231,7 @@ router.get("/me", async (req: Request, res: Response) => {
       // Update user object for response
       user.role = "admin";
     }
-    
+
     // Get subscription from subscriptions table
     const subscriptionRecords = await db
       .select()
@@ -306,7 +310,7 @@ router.get("/me", async (req: Request, res: Response) => {
 router.post("/confirm-email", authLimiter, async (req: Request, res: Response) => {
   try {
     const { supabaseId } = req.body;
-    
+
     if (!supabaseId) {
       return res.status(400).json({ message: "supabaseId is required" });
     }
@@ -338,7 +342,7 @@ router.post("/confirm-email", authLimiter, async (req: Request, res: Response) =
 router.get("/usage", async (req: Request, res: Response) => {
   try {
     const { supabaseId } = req.query;
-    
+
     if (!supabaseId) {
       return res.status(400).json({ message: "supabaseId is required" });
     }
@@ -369,74 +373,8 @@ router.get("/usage", async (req: Request, res: Response) => {
       .orderBy(desc(subscriptions.createdAt))
       .limit(1);
 
-    const plan = subscriptionRecords[0]?.plan || "basic";
-
-    // Get today's date range (start of day to end of day)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    // Count completed attempts today
-    const dailyAttempts = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(attempts)
-      .where(
-        and(
-          eq(attempts.userId, user.id),
-          eq(attempts.status, "completed"),
-          gte(attempts.createdAt, today),
-          sql`${attempts.createdAt} < ${tomorrow}`
-        )
-      );
-
-    const dailyCount = Number(dailyAttempts[0]?.count || 0);
-
-    // Get this month's attempts
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
-
-    const monthlyAttempts = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(attempts)
-      .where(
-        and(
-          eq(attempts.userId, user.id),
-          eq(attempts.status, "completed"),
-          gte(attempts.createdAt, monthStart)
-        )
-      );
-
-    const monthlyCount = Number(monthlyAttempts[0]?.count || 0);
-
-    // Determine limits based on plan per specification
-    // Basic: 1/day (30/month), Standard: 3/day (90/month), Premium: unlimited
-    let dailyLimit: number | null = null;
-    let monthlyLimit: number | null = null;
-    
-    if (plan === "basic") {
-      dailyLimit = 1;
-      monthlyLimit = 30;
-    } else if (plan === "standard") {
-      dailyLimit = 3;
-      monthlyLimit = 90;
-    }
-    // Premium has no limits (null = unlimited)
-
-    return res.json({
-      daily: {
-        count: dailyCount,
-        limit: dailyLimit,
-        remaining: dailyLimit !== null ? Math.max(0, dailyLimit - dailyCount) : null,
-      },
-      monthly: {
-        count: monthlyCount,
-        limit: monthlyLimit,
-        remaining: monthlyLimit !== null ? Math.max(0, monthlyLimit - monthlyCount) : null,
-      },
-      plan,
-    });
+    const usage = await ExamLimitService.getUsage(user.id);
+    return res.json(usage);
   } catch (err: any) {
     console.error("Error fetching usage:", err);
     return res.status(500).json({ message: "Failed to fetch usage", error: err.message || String(err) });
@@ -447,7 +385,7 @@ router.get("/usage", async (req: Request, res: Response) => {
 router.put("/preferred-exam-body", async (req: Request, res: Response) => {
   try {
     const { supabaseId, examBody } = req.body;
-    
+
     if (!supabaseId || !examBody) {
       return res.status(400).json({ message: "supabaseId and examBody are required" });
     }

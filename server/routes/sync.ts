@@ -36,14 +36,16 @@ router.post("/", async (req: Request, res: Response) => {
     return res.status(400).json({ message: "Invalid sync payload" });
   }
 
-  if (body.type === "attempt") {
-    const attempt = body.payload;
-    if (!attempt.id || !attempt.examId) {
-      return res.status(400).json({ message: "Attempt must include id and examId" });
-    }
-    try {
-      // Idempotent insert; if exists, do nothing
-      const insertResult = await db
+  try {
+    if (body.type === "attempt") {
+      const attempt = body.payload;
+      if (!attempt.id || !attempt.examId) {
+        return res.status(400).json({ message: "Attempt must include id and examId" });
+      }
+
+      console.log(`[SYNC ATTEMPT] Type: ${body.type}, ID: ${attempt.id}, Status: ${attempt.status}, Answer Count: ${Object.keys(attempt.answers || {}).length}`);
+
+      await db
         .insert(attempts)
         .values({
           id: attempt.id,
@@ -56,7 +58,17 @@ router.post("/", async (req: Request, res: Response) => {
           totalQuestions: attempt.totalQuestions,
           status: attempt.status,
         })
-        .onConflictDoNothing({ target: attempts.id });
+        .onConflictDoUpdate({
+          target: attempts.id,
+          set: {
+            answers: attempt.answers,
+            status: attempt.status,
+            completedAt: attempt.completedAt,
+            durationSeconds: attempt.durationSeconds,
+            totalQuestions: attempt.totalQuestions,
+            userId: attempt.userId || null,
+          },
+        });
 
       // Update user stats if attempt is completed and has userId
       if (attempt.status === "completed" && attempt.userId && attempt.totalQuestions) {
@@ -64,24 +76,20 @@ router.post("/", async (req: Request, res: Response) => {
           await updateUserStats(attempt.userId, attempt.examId, attempt.answers, attempt.totalQuestions);
         } catch (err) {
           console.error("Error updating user stats:", err);
-          // Don't fail the sync if stats update fails
         }
       }
 
       return res.json({ message: "Attempt synced", stored: true });
-    } catch (err) {
-      return res.status(500).json({ message: "Failed to sync attempt", error: String(err) });
     }
-  }
 
-  if (body.type === "questionData") {
-    const incoming = body.payload;
-    const normalizedIncoming = {
-      ...incoming,
-      categories: Array.isArray((incoming as any).categories) ? (incoming as any).categories : [],
-    };
-    const incomingVersion = incoming.updatedAt ?? Date.now();
-    try {
+    if (body.type === "questionData") {
+      const incoming = body.payload;
+      const normalizedIncoming = {
+        ...incoming,
+        categories: Array.isArray((incoming as any).categories) ? (incoming as any).categories : [],
+      };
+      const incomingVersion = incoming.updatedAt ?? Date.now();
+
       const existing = await db
         .select()
         .from(questionDataVersions)
@@ -110,12 +118,13 @@ router.post("/", async (req: Request, res: Response) => {
       }
 
       return res.json({ message: "Question data ignored (older version)", applied: false, version: currentVersion });
-    } catch (err) {
-      return res.status(500).json({ message: "Failed to sync question data", error: String(err) });
     }
-  }
 
-  return res.status(400).json({ message: "Unknown sync type" });
+    return res.status(400).json({ message: "Unknown sync type" });
+  } catch (err) {
+    console.error("Sync error:", err);
+    return res.status(500).json({ message: "Sync failed", error: String(err) });
+  }
 });
 
 // Helper function to update user stats
@@ -231,7 +240,7 @@ async function updateUserStats(userId: string, examId: string, answers: Record<s
 
   // Check for achievements
   const achievements = new Set(currentStats.achievements || []);
-  
+
   if (newTotalQuestions === 1 && !achievements.has("first_question")) {
     achievements.add("first_question");
   }

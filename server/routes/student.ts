@@ -13,8 +13,8 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
     const { exam_body_id, category_id, question_count, supabaseId } = req.body;
 
     if (!exam_body_id || !category_id || !question_count || !supabaseId) {
-      return res.status(400).json({ 
-        message: "Missing required fields: exam_body_id, category_id, question_count, supabaseId" 
+      return res.status(400).json({
+        message: "Missing required fields: exam_body_id, category_id, question_count, supabaseId"
       });
     }
 
@@ -34,7 +34,7 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
     // Resolve exam body - accept either ID or name
     let resolvedExamBodyId = exam_body_id;
     let examBodyName = exam_body_id;
-    
+
     // Check if it's a name (not a UUID-like ID)
     if (!exam_body_id.includes("-") || exam_body_id.length < 20) {
       const examBodyRecord = await db
@@ -42,7 +42,7 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
         .from(examBodies)
         .where(eq(examBodies.name, exam_body_id))
         .limit(1);
-      
+
       if (examBodyRecord.length > 0) {
         resolvedExamBodyId = examBodyRecord[0].id;
         examBodyName = examBodyRecord[0].name;
@@ -54,7 +54,7 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
     // Resolve category - accept either ID or name (Science, Arts, Commercial)
     let resolvedCategoryId = category_id;
     let categoryName = category_id;
-    
+
     if (!category_id.includes("-") || category_id.length < 20) {
       try {
         const categoryRecord = await db
@@ -67,7 +67,7 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
             )
           )
           .limit(1);
-        
+
         if (categoryRecord.length > 0) {
           resolvedCategoryId = categoryRecord[0].id;
           categoryName = categoryRecord[0].name;
@@ -78,7 +78,7 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
             .from(categories)
             .where(eq(categories.name, category_id))
             .limit(1);
-          
+
           if (anyCategoryRecord.length > 0) {
             resolvedCategoryId = anyCategoryRecord[0].id;
             categoryName = anyCategoryRecord[0].name;
@@ -123,7 +123,7 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
 
     // Check question count limit
     if (question_count > limits.max_questions_per_exam) {
-      return res.status(403).json({ 
+      return res.status(403).json({
         message: `${plan.charAt(0).toUpperCase() + plan.slice(1)} plan allows maximum ${limits.max_questions_per_exam} questions per exam`,
         maxQuestions: limits.max_questions_per_exam
       });
@@ -149,7 +149,7 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
       const monthlyCount = Number(monthlyAttempts[0]?.count || 0);
 
       if (monthlyCount >= limits.monthly_exam_limit) {
-        return res.status(403).json({ 
+        return res.status(403).json({
           message: `Monthly exam limit reached. ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan allows ${limits.monthly_exam_limit} exams per month.`,
           monthlyLimit: limits.monthly_exam_limit,
           monthlyCount
@@ -171,7 +171,7 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
             eq(questions.status, "live")
           )
         );
-      
+
       // If no questions found with category filter, try without it
       if (availableQuestions.length === 0) {
         console.warn(`No questions found for category ${categoryName}, trying without category filter`);
@@ -187,15 +187,15 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
       }
     } catch (error: any) {
       console.error("Error fetching questions:", error);
-      return res.status(500).json({ 
-        message: "Failed to fetch questions", 
-        error: error?.message || String(error) 
+      return res.status(500).json({
+        message: "Failed to fetch questions",
+        error: error?.message || String(error)
       });
     }
 
     // Check if sufficient questions exist
     if (availableQuestions.length < question_count) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: `Only ${availableQuestions.length} questions available for this category. Requested: ${question_count}`,
         availableQuestions: availableQuestions.length
       });
@@ -209,16 +209,16 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
     // Take Exam Feature: Use categoryId as subjectId fallback (different from Quick Test)
     // Quick Test uses random questions, Take Exam uses structured approach
     let examSubjectId = selectedQuestions[0]?.subjectId;
-    
+
     // If questions don't have subjectId, use categoryId as fallback for Take Exam
     if (!examSubjectId && resolvedCategoryId) {
       examSubjectId = resolvedCategoryId;
       console.warn('Using categoryId as subjectId fallback for Take Exam');
     }
-    
+
     // Final validation for Take Exam
     if (!examSubjectId) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         message: "Failed to generate Take Exam: Unable to determine subjectId",
         error: "subjectId is required for exam creation"
       });
@@ -229,7 +229,7 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
     // id, title, subject, body, subcategory, exam_body_id, category_id, subject_id, question_ids, duration, description
     const examId = `exam-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     if (process.env.NODE_ENV === 'development') console.log(`[TAKE EXAM] Creating exam: ${examId} with ${questionIds.length} questions`);
-    
+
     const exam = await safeInsertExam({
       id: examId,
       title: `${examBodyName} ${categoryName} Practice - ${question_count} Questions`,
@@ -241,14 +241,18 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
       subcategory: categoryName,
       questionIds,
       duration: 3600, // 60 minutes in seconds
+      durationMinutes: 60,
+      totalQuestions: questionIds.length,
+      totalMarks: questionIds.length, // Default 1 mark per question
+      createdBy: user.id, // Required by database constraint
       description: `Take Exam: ${question_count} questions from ${examBodyName} ${categoryName}`,
     });
-    
+
     if (process.env.NODE_ENV === 'development') console.log(`[TAKE EXAM] Exam created successfully:`, exam?.id || 'No ID returned');
 
     // Return exam with questions for immediate use in frontend
-    const response = { 
-      ...exam, 
+    const response = {
+      ...exam,
       questions: selectedQuestions.map(q => ({
         id: q.id,
         text: q.text, // Use 'text' to match Question type in ExamRoom
@@ -259,15 +263,15 @@ router.post("/exams/generate", async (req: Request, res: Response) => {
         explanation: null
       }))
     };
-    
+
     if (process.env.NODE_ENV === 'development') console.log(`[TAKE EXAM] Returning ${response.questions.length} questions`);
     return res.json(response);
 
   } catch (err: any) {
     console.error("Error generating structured exam:", err);
-    return res.status(500).json({ 
-      message: "Failed to generate exam", 
-      error: err.message || String(err) 
+    return res.status(500).json({
+      message: "Failed to generate exam",
+      error: err.message || String(err)
     });
   }
 });
@@ -333,7 +337,7 @@ router.post("/exams/quick-test", async (req: Request, res: Response) => {
     // Quick Test: Strict validation - NO fallbacks (different from Take Exam)
     // Quick Test must have subjectId in questions, Take Exam uses categoryId fallback
     if (!randomQuestions[0]?.subjectId) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         message: "Failed to generate quick test: Questions missing required subjectId",
         error: "subjectId is required for exam creation"
       });
@@ -345,7 +349,7 @@ router.post("/exams/quick-test", async (req: Request, res: Response) => {
     // Only include columns that exist in the database
     const quickExamId = `quick-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     if (process.env.NODE_ENV === 'development') console.log(`[QUICK TEST] Creating exam: ${quickExamId} with ${questionIds.length} questions`);
-    
+
     const exam = await safeInsertExam({
       id: quickExamId,
       title: `Quick Test - ${questionCount} Questions`,
@@ -357,14 +361,18 @@ router.post("/exams/quick-test", async (req: Request, res: Response) => {
       subcategory: "Mixed",
       questionIds,
       duration: 1800, // 30 minutes in seconds
+      durationMinutes: 30,
+      totalQuestions: questionIds.length,
+      totalMarks: questionIds.length,
+      createdBy: user.id, // Required by database constraint
       description: `Quick Test: ${questionCount} random questions`,
     });
-    
+
     if (process.env.NODE_ENV === 'development') console.log(`[QUICK TEST] Exam created successfully:`, exam?.id || 'No ID returned');
 
     // Return exam with questions for immediate use in frontend
-    const response = { 
-      ...exam, 
+    const response = {
+      ...exam,
       questions: randomQuestions.map(q => ({
         id: q.id,
         text: q.text, // Use 'text' to match Question type in ExamRoom
@@ -375,15 +383,15 @@ router.post("/exams/quick-test", async (req: Request, res: Response) => {
         explanation: null
       }))
     };
-    
+
     if (process.env.NODE_ENV === 'development') console.log(`[QUICK TEST] Returning ${response.questions.length} questions`);
     return res.json(response);
 
   } catch (err: any) {
     console.error("Error generating quick test:", err);
-    return res.status(500).json({ 
-      message: "Failed to generate quick test", 
-      error: err.message || String(err) 
+    return res.status(500).json({
+      message: "Failed to generate quick test",
+      error: err.message || String(err)
     });
   }
 });
@@ -449,7 +457,7 @@ router.get("/stats", async (req: Request, res: Response) => {
     const monthStart = new Date();
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
-    const examsThisMonth = completedAttempts.filter(a => 
+    const examsThisMonth = completedAttempts.filter(a =>
       a.createdAt && new Date(a.createdAt) >= monthStart
     ).length;
 
@@ -484,9 +492,9 @@ router.get("/stats", async (req: Request, res: Response) => {
 
   } catch (err: any) {
     console.error("Error fetching student stats:", err);
-    return res.status(500).json({ 
-      message: "Failed to fetch stats", 
-      error: err.message || String(err) 
+    return res.status(500).json({
+      message: "Failed to fetch stats",
+      error: err.message || String(err)
     });
   }
 });
@@ -597,9 +605,9 @@ router.get("/usage", async (req: Request, res: Response) => {
 
   } catch (err: any) {
     console.error("Error fetching usage stats:", err);
-    return res.status(500).json({ 
-      message: "Failed to fetch usage stats", 
-      error: err.message || String(err) 
+    return res.status(500).json({
+      message: "Failed to fetch usage stats",
+      error: err.message || String(err)
     });
   }
 });

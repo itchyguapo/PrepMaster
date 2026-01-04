@@ -359,13 +359,15 @@ router.get("/diagnostic", async (req: Request, res: Response) => {
       adminEmailsConfigured: adminEmails.length,
       adminEmailsList: adminEmails,
       adminEmailsEnv: process.env.ADMIN_EMAILS ? "SET" : "NOT SET",
+      supabaseInitialized: !!(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL),
       recommendations: [
         !user ? "User not found in database. Try syncing via /api/auth/sync-user" : null,
         !userEmail ? "User has no email. Email is required for admin access." : null,
         !isInWhitelist && userEmail ? `Email "${userEmail}" is not in ADMIN_EMAILS whitelist. Add it to .env file.` : null,
         user?.role !== "admin" && !isInWhitelist ? "User role is not 'admin' and email is not in whitelist." : null,
+        !(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL) ? "SUPABASE_URL is not set." : null,
         !process.env.ADMIN_EMAILS ? "ADMIN_EMAILS environment variable is not set." : null,
-        !process.env.SUPABASE_SERVICE_ROLE_KEY ? "SUPABASE_SERVICE_ROLE_KEY is not set (required for auth)." : null
+        !process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.VITE_SUPABASE_ANON_KEY ? "No Supabase key set (service role or anon key required)." : null
       ].filter(Boolean)
     });
   } catch (err: any) {
@@ -1842,53 +1844,67 @@ router.get("/questions", async (req: Request, res: Response) => {
     // Sort by creation date (newest first) for easy management
     const questionsList = await questionsQuery.orderBy(desc(questions.createdAt));
 
-    // Fetch options for each question from question_options table
-    // CRITICAL: Must fetch from question_options table, not from questions.options JSONB
-    const questionsWithOptions = await Promise.all(
-      questionsList.map(async (q) => {
-        const options = await db
-          .select()
-          .from(questionOptions)
-          .where(eq(questionOptions.questionId, q.id))
-          .orderBy(questionOptions.order);
+    // Optimize: Fetch all options in one query instead of N+1
+    const questionIds = questionsList.map(q => q.id);
+    let allOptions: any[] = [];
 
-        // Get correct answer from questionOptions table (isCorrect flag)
-        const correctOption = options.find(opt => opt.isCorrect);
-        const correctAnswer = correctOption?.optionId || null;
+    if (questionIds.length > 0) {
+      allOptions = await db
+        .select()
+        .from(questionOptions)
+        .where(inArray(questionOptions.questionId, questionIds))
+        .orderBy(questionOptions.order);
+    }
 
-        // Map status: old statuses -> new statuses for compatibility
-        let mappedStatus = q.status || "review";
-        if (mappedStatus === "draft" || mappedStatus === "reviewed") {
-          mappedStatus = "review";
-        } else if (mappedStatus === "approved") {
-          mappedStatus = "live";
-        } else if (mappedStatus === "archived") {
-          mappedStatus = "disabled";
-        }
+    // Group options by questionId
+    const optionsMap = new Map<string, any[]>();
+    allOptions.forEach(opt => {
+      if (!optionsMap.has(opt.questionId)) {
+        optionsMap.set(opt.questionId, []);
+      }
+      optionsMap.get(opt.questionId)?.push(opt);
+    });
 
-        return {
-          id: q.id,
-          text: q.text,
-          examBodyId: q.examBodyId,
-          categoryId: q.categoryId || null,
-          subjectId: q.subjectId,
-          topic: q.topic || q.topicId || null,
-          status: mappedStatus,
-          createdAt: q.createdAt || null,
-          options: options.map(opt => ({
-            optionId: opt.optionId,
-            id: opt.optionId, // Include both id and optionId for compatibility
-            text: opt.text,
-            isCorrect: opt.isCorrect,
-            order: opt.order
-          })),
-          correctAnswer // Derived from questionOptions.isCorrect flag
-        };
-      })
-    );
+    const questionsWithOptions = questionsList.map((q) => {
+      const options = optionsMap.get(q.id) || [];
+
+      // Get correct answer from questionOptions table (isCorrect flag)
+      const correctOption = options.find(opt => opt.isCorrect);
+      const correctAnswer = correctOption?.optionId || null;
+
+      // Map status: old statuses -> new statuses for compatibility
+      let mappedStatus = q.status || "review";
+      if (mappedStatus === "draft" || mappedStatus === "reviewed") {
+        mappedStatus = "review";
+      } else if (mappedStatus === "approved") {
+        mappedStatus = "live";
+      } else if (mappedStatus === "archived") {
+        mappedStatus = "disabled";
+      }
+
+      return {
+        id: q.id,
+        text: q.text,
+        examBodyId: q.examBodyId,
+        categoryId: q.categoryId || null,
+        subjectId: q.subjectId,
+        topic: q.topic || q.topicId || null,
+        status: mappedStatus,
+        createdAt: q.createdAt || null,
+        options: options.map(opt => ({
+          optionId: opt.optionId,
+          id: opt.optionId, // Include both id and optionId for compatibility
+          text: opt.text,
+          isCorrect: opt.isCorrect,
+          order: opt.order
+        })),
+        correctAnswer // Derived from questionOptions.isCorrect flag
+      };
+    });
 
     return res.json(questionsWithOptions);
   } catch (err) {
+    console.error("[ADMIN QUESTIONS] Error fetching questions:", err);
     return res.status(500).json({ message: "Failed to fetch questions", error: String(err) });
   }
 });
@@ -3930,6 +3946,192 @@ router.delete("/blog/:id", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("Error deleting blog post:", err);
     return res.status(500).json({ message: "Failed to delete blog post", error: err.message || String(err) });
+  }
+});
+
+// ============================================
+// USER MANAGEMENT ENDPOINTS (Admin Only)
+// ============================================
+
+// Ban or unban a user
+router.put("/users/:id/ban", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { isBanned, reason } = req.body;
+
+    if (typeof isBanned !== "boolean") {
+      return res.status(400).json({ message: "isBanned (boolean) is required" });
+    }
+
+    // Check if user exists
+    const userRecords = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+
+    if (userRecords.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const targetUser = userRecords[0];
+
+    // Prevent banning admins
+    if (targetUser.role === "admin") {
+      return res.status(403).json({ message: "Cannot ban admin users" });
+    }
+
+    // Update user ban status
+    const [updated] = await db
+      .update(users)
+      .set({
+        isBanned,
+        bannedAt: isBanned ? new Date() : null,
+        bannedReason: isBanned ? (reason || "Banned by admin") : null,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, id))
+      .returning();
+
+    console.log(`[ADMIN] User ${isBanned ? "BANNED" : "UNBANNED"}: ${updated.email} by admin`);
+
+    return res.json({
+      message: `User ${isBanned ? "banned" : "unbanned"} successfully`,
+      user: {
+        id: updated.id,
+        email: updated.email,
+        isBanned: updated.isBanned,
+        bannedAt: updated.bannedAt,
+        bannedReason: updated.bannedReason
+      }
+    });
+  } catch (err: any) {
+    console.error("Error banning/unbanning user:", err);
+    return res.status(500).json({ message: "Failed to update user ban status", error: err.message || String(err) });
+  }
+});
+
+// Delete a user (hard delete)
+router.delete("/users/:id", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Check if user exists
+    const userRecords = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+
+    if (userRecords.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const targetUser = userRecords[0];
+
+    // Prevent deleting admins
+    if (targetUser.role === "admin") {
+      return res.status(403).json({ message: "Cannot delete admin users" });
+    }
+
+    // Delete associated data first (cascading)
+    await db.delete(attempts).where(eq(attempts.userId, id));
+    await db.delete(subscriptions).where(eq(subscriptions.userId, id));
+    await db.delete(exams).where(eq(exams.createdBy, id));
+
+    // Delete the user
+    await db.delete(users).where(eq(users.id, id));
+
+    console.log(`[ADMIN] User DELETED: ${targetUser.email} (ID: ${id})`);
+
+    return res.json({
+      message: "User deleted successfully",
+      deletedUser: {
+        id: targetUser.id,
+        email: targetUser.email,
+        username: targetUser.username
+      }
+    });
+  } catch (err: any) {
+    console.error("Error deleting user:", err);
+    return res.status(500).json({ message: "Failed to delete user", error: err.message || String(err) });
+  }
+});
+
+// Bulk delete test users (users with "test" in email or username)
+router.delete("/users/test-users", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    // Find test users (email or username contains "test")
+    const testUsers = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          or(
+            ilike(users.email, "%test%"),
+            ilike(users.username, "%test%")
+          ),
+          // Never delete admins
+          sql`${users.role} != 'admin'`
+        )
+      );
+
+    if (testUsers.length === 0) {
+      return res.json({ message: "No test users found", deletedCount: 0 });
+    }
+
+    const testUserIds = testUsers.map(u => u.id);
+
+    // Delete associated data
+    for (const userId of testUserIds) {
+      await db.delete(attempts).where(eq(attempts.userId, userId));
+      await db.delete(subscriptions).where(eq(subscriptions.userId, userId));
+      await db.delete(exams).where(eq(exams.createdBy, userId));
+    }
+
+    // Delete the test users
+    await db.delete(users).where(inArray(users.id, testUserIds));
+
+    console.log(`[ADMIN] BULK DELETE: ${testUsers.length} test users deleted`);
+    testUsers.forEach(u => console.log(`  - ${u.email || u.username}`));
+
+    return res.json({
+      message: `Successfully deleted ${testUsers.length} test users`,
+      deletedCount: testUsers.length,
+      deletedUsers: testUsers.map(u => ({
+        id: u.id,
+        email: u.email,
+        username: u.username
+      }))
+    });
+  } catch (err: any) {
+    console.error("Error deleting test users:", err);
+    return res.status(500).json({ message: "Failed to delete test users", error: err.message || String(err) });
+  }
+});
+
+// Get all users with ban status (for admin user management)
+router.get("/users", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const allUsers = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        email: users.email,
+        role: users.role,
+        subscriptionStatus: users.subscriptionStatus,
+        isBanned: users.isBanned,
+        bannedAt: users.bannedAt,
+        bannedReason: users.bannedReason,
+        createdAt: users.createdAt
+      })
+      .from(users)
+      .orderBy(desc(users.createdAt));
+
+    return res.json(allUsers);
+  } catch (err: any) {
+    console.error("Error fetching users:", err);
+    return res.status(500).json({ message: "Failed to fetch users", error: err.message || String(err) });
   }
 });
 

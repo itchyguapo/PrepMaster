@@ -6,24 +6,24 @@
 interface EnvConfig {
   // Required
   DATABASE_URL: string;
-  
+
   // Optional but recommended
   NODE_ENV: string;
   PORT: string;
   ALLOWED_ORIGINS?: string;
-  
+
   // Supabase (optional for some features)
   VITE_SUPABASE_URL?: string;
   SUPABASE_URL?: string;
   VITE_SUPABASE_ANON_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
-  
+
   // Paystack (optional if not using payments)
   PAYSTACK_SECRET_KEY?: string;
   PAYSTACK_WEBHOOK_SECRET?: string;
   PAYSTACK_BASE_URL?: string;
   FRONTEND_URL?: string;
-  
+
   // Admin
   ADMIN_EMAILS?: string;
 }
@@ -56,11 +56,11 @@ export function validateEnv(): void {
  */
 export function getEnv(key: keyof EnvConfig, required = false): string {
   const value = process.env[key];
-  
+
   if (required && !value) {
     throw new Error(`Required environment variable ${key} is not set`);
   }
-  
+
   return value || '';
 }
 
@@ -92,16 +92,25 @@ export function validatePaystackConfig(): void {
  */
 export function getAllowedOrigins(): string[] {
   const envOrigins = process.env.ALLOWED_ORIGINS;
-  
+
   if (envOrigins) {
     return envOrigins.split(',').map(origin => origin.trim()).filter(Boolean);
   }
-  
+
   // Default origins for development
   if (process.env.NODE_ENV === 'development') {
-    return ['http://localhost:5000', 'http://localhost:5001', 'http://localhost:5173', 'http://127.0.0.1:5000', 'http://127.0.0.1:5001', 'http://127.0.0.1:5173'];
+    return [
+      'http://localhost:5000',
+      'http://localhost:5001',
+      'http://localhost:5002',
+      'http://localhost:5173',
+      'http://127.0.0.1:5000',
+      'http://127.0.0.1:5001',
+      'http://127.0.0.1:5002',
+      'http://127.0.0.1:5173'
+    ];
   }
-  
+
   // Production: require explicit configuration
   return [];
 }

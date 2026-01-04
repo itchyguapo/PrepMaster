@@ -15,13 +15,38 @@ import { eq } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import { isAdminEmail, normalizeEmail } from "../utils/adminEmails";
 
-// Initialize Supabase client
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+// Lazy initialized Supabase client
+let supabaseInstance: any = null;
 
-const supabase = supabaseUrl && supabaseServiceKey 
-  ? createClient(supabaseUrl, supabaseServiceKey)
-  : null;
+function getSupabase() {
+  if (supabaseInstance) return supabaseInstance;
+
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+
+  if (supabaseUrl && supabaseServiceKey) {
+    console.log("[ADMIN AUTH] Initializing Supabase client...");
+    console.log(`[ADMIN AUTH] URL: ${supabaseUrl.substring(0, 8)}...`);
+    console.log(`[ADMIN AUTH] Key Length: ${supabaseServiceKey.length}`);
+    console.log(`[ADMIN AUTH] Key Start: ${supabaseServiceKey.substring(0, 10)}...`);
+
+    // Check if key looks like a JWT (should start with eyJ)
+    if (!supabaseServiceKey.startsWith("eyJ")) {
+      console.warn("[ADMIN AUTH] ⚠️ WARNING: Service Role Key does not start with 'eyJ'. It might be invalid.");
+    }
+
+    supabaseInstance = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+    return supabaseInstance;
+  }
+
+  console.warn("[ADMIN AUTH] Supabase URL or Key missing. Token verification will fail.");
+  return null;
+}
 
 // Admin status cache (in-memory with TTL)
 interface AdminStatusCache {
@@ -47,17 +72,17 @@ export function extractSupabaseId(req: any): string | null {
       return token; // This will be verified later if it's a token
     }
   }
-  
+
   // 2. Try query parameter
   if (req.query?.supabaseId) {
     return req.query.supabaseId as string;
   }
-  
+
   // 3. Try body
   if (req.body?.supabaseId) {
     return req.body.supabaseId as string;
   }
-  
+
   return null;
 }
 
@@ -78,19 +103,25 @@ export function extractBearerToken(req: any): string | null {
  * Verify Supabase token and extract user ID
  */
 export async function verifySupabaseToken(token: string): Promise<string | null> {
-  if (!supabase) {
+  const supabaseClient = getSupabase();
+  if (!supabaseClient) {
     console.error("[ADMIN AUTH] Supabase client not initialized");
     return null;
   }
-  
+
   try {
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (error || !user) {
+    const { data: { user }, error } = await supabaseClient.auth.getUser(token);
+    if (error) {
+      console.error("[ADMIN AUTH] Supabase getUser error:", error.message, error.status);
+      return null;
+    }
+    if (!user) {
+      console.warn("[ADMIN AUTH] No user returned from Supabase for token");
       return null;
     }
     return user.id;
-  } catch (error) {
-    console.error("[ADMIN AUTH] Token verification error:", error);
+  } catch (error: any) {
+    console.error("[ADMIN AUTH] Token verification exception:", error.message || error);
     return null;
   }
 }
@@ -99,17 +130,18 @@ export async function verifySupabaseToken(token: string): Promise<string | null>
  * Sync user from Supabase to database
  */
 async function syncUserFromSupabase(supabaseId: string, token?: string): Promise<any | null> {
-  if (!supabase) {
+  const supabaseClient = getSupabase();
+  if (!supabaseClient) {
     console.warn(`[ADMIN AUTH] Cannot sync: Supabase client not initialized`);
     return null;
   }
-  
+
   try {
     // Get user info from Supabase
     let supabaseUser;
     if (token) {
       console.log(`[ADMIN AUTH] Attempting to sync user with token (length: ${token.length})`);
-      const { data, error } = await supabase.auth.getUser(token);
+      const { data, error } = await supabaseClient.auth.getUser(token);
       if (error) {
         console.error(`[ADMIN AUTH] Token verification error:`, error.message);
         return null;
@@ -123,7 +155,7 @@ async function syncUserFromSupabase(supabaseId: string, token?: string): Promise
     } else {
       // Try to get user by ID (requires service role key)
       console.log(`[ADMIN AUTH] Attempting to sync user by ID: ${supabaseId.slice(0, 8)}...`);
-      const { data, error } = await supabase.auth.admin.getUserById(supabaseId);
+      const { data, error } = await supabaseClient.auth.admin.getUserById(supabaseId);
       if (error) {
         console.error(`[ADMIN AUTH] getUserById error:`, error.message);
         return null;
@@ -135,32 +167,32 @@ async function syncUserFromSupabase(supabaseId: string, token?: string): Promise
       supabaseUser = data.user;
       console.log(`[ADMIN AUTH] ✅ Got user by ID: ${supabaseUser.email || 'no email'}`);
     }
-    
+
     if (!supabaseUser) {
       console.warn(`[ADMIN AUTH] supabaseUser is null after fetch attempt`);
       return null;
     }
-    
+
     // Generate unique username
     let username = supabaseUser.email?.split("@")[0] || `user_${supabaseId.slice(0, 8)}`;
     let attempts = 0;
-    
+
     while (attempts < 10) {
       const existing = await db
         .select()
         .from(users)
         .where(eq(users.username, username))
         .limit(1);
-      
+
       if (existing.length === 0) break;
       username = `${username}_${Math.floor(Math.random() * 1000)}`;
       attempts++;
     }
-    
+
     // Check if admin before creating
     const userEmail = normalizeEmail(supabaseUser.email);
     const isAdmin = userEmail ? isAdminEmail(userEmail) : false;
-    
+
     // Check if user already exists by email (in case supabaseId changed)
     if (supabaseUser.email) {
       const existingByEmail = await db
@@ -168,7 +200,7 @@ async function syncUserFromSupabase(supabaseId: string, token?: string): Promise
         .from(users)
         .where(eq(users.email, supabaseUser.email))
         .limit(1);
-      
+
       if (existingByEmail.length > 0) {
         const existing = existingByEmail[0];
         // Update supabaseId if it's different
@@ -176,20 +208,20 @@ async function syncUserFromSupabase(supabaseId: string, token?: string): Promise
           console.log(`[ADMIN AUTH] Updating supabaseId for existing user: ${existing.email}`);
           await db
             .update(users)
-            .set({ 
+            .set({
               supabaseId: supabaseUser.id,
               role: isAdmin ? "admin" : existing.role, // Update role if admin
               updatedAt: new Date()
             })
             .where(eq(users.id, existing.id));
-          
+
           // Return updated user
           const updated = await db
             .select()
             .from(users)
             .where(eq(users.id, existing.id))
             .limit(1);
-          
+
           if (updated.length > 0) {
             console.log(`[ADMIN AUTH] ✅ User updated: ${updated[0].id}${isAdmin ? " (admin)" : ""}`);
             return updated[0];
@@ -207,7 +239,7 @@ async function syncUserFromSupabase(supabaseId: string, token?: string): Promise
         return existing;
       }
     }
-    
+
     // Create new user
     try {
       console.log(`[ADMIN AUTH] Creating new user: ${supabaseUser.email || 'no email'}${isAdmin ? " (admin)" : ""}`);
@@ -219,7 +251,7 @@ async function syncUserFromSupabase(supabaseId: string, token?: string): Promise
         phone: supabaseUser.phone || null,
         role: isAdmin ? "admin" : "student",
       }).returning();
-      
+
       console.log(`[ADMIN AUTH] ✅ User created: ${newUser.id}${isAdmin ? " (admin)" : ""}`);
       return newUser;
     } catch (insertError: any) {
@@ -232,11 +264,11 @@ async function syncUserFromSupabase(supabaseId: string, token?: string): Promise
           .from(users)
           .where(eq(users.supabaseId, supabaseUser.id))
           .limit(1);
-        
+
         if (existing.length > 0) {
           return existing[0];
         }
-        
+
         // Try by email as fallback
         if (supabaseUser.email) {
           const existingByEmail = await db
@@ -244,7 +276,7 @@ async function syncUserFromSupabase(supabaseId: string, token?: string): Promise
             .from(users)
             .where(eq(users.email, supabaseUser.email))
             .limit(1);
-          
+
           if (existingByEmail.length > 0) {
             return existingByEmail[0];
           }
@@ -272,13 +304,16 @@ async function getUser(supabaseId: string, token?: string): Promise<any | null> 
     .from(users)
     .where(eq(users.supabaseId, supabaseId))
     .limit(1);
-  
+
   if (userRecords.length > 0) {
     return userRecords[0];
   }
-  
+
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
   // User not found by supabaseId - try to get email from token and find by email
-  if (token && supabase) {
+  if (token) {
     try {
       const { data, error } = await supabase.auth.getUser(token);
       if (!error && data?.user?.email) {
@@ -289,7 +324,7 @@ async function getUser(supabaseId: string, token?: string): Promise<any | null> 
             .from(users)
             .where(eq(users.email, email))
             .limit(1);
-          
+
           if (userByEmail.length > 0) {
             const existing = userByEmail[0];
             // Update supabaseId if it's different
@@ -309,21 +344,16 @@ async function getUser(supabaseId: string, token?: string): Promise<any | null> 
       console.warn(`[ADMIN AUTH] Error getting email from token:`, err);
     }
   }
-  
+
   // User not found by supabaseId or email - try to sync from Supabase
-  if (supabase) {
-    console.log(`[ADMIN AUTH] User not found by supabaseId, attempting sync: ${supabaseId.slice(0, 8)}...`);
-    const syncedUser = await syncUserFromSupabase(supabaseId, token);
-    if (syncedUser) {
-      console.log(`[ADMIN AUTH] ✅ User synced successfully: ${syncedUser.id}`);
-      return syncedUser;
-    } else {
-      console.warn(`[ADMIN AUTH] ⚠️ User sync failed for: ${supabaseId.slice(0, 8)}...`);
-    }
-  } else {
-    console.warn(`[ADMIN AUTH] ⚠️ Supabase client not initialized, cannot sync user`);
+  console.log(`[ADMIN AUTH] User not found by supabaseId, attempting sync: ${supabaseId.slice(0, 8)}...`);
+  const syncedUser = await syncUserFromSupabase(supabaseId, token);
+  if (syncedUser) {
+    console.log(`[ADMIN AUTH] ✅ User synced successfully: ${syncedUser.id}`);
+    return syncedUser;
   }
-  
+
+  console.warn(`[ADMIN AUTH] ⚠️ User sync failed for: ${supabaseId.slice(0, 8)}...`);
   return null;
 }
 
@@ -355,13 +385,13 @@ export async function checkAdminStatus(
     // Cache expired, remove it
     delete adminCache[supabaseId];
   }
-  
+
   // Get user if not provided
   let userRecord = user;
   if (!userRecord) {
     userRecord = await getUser(supabaseId, token);
   }
-  
+
   if (!userRecord) {
     // Cache negative result (shorter TTL)
     adminCache[supabaseId] = {
@@ -371,10 +401,10 @@ export async function checkAdminStatus(
     };
     return { isAdmin: false, user: null, email: null };
   }
-  
+
   // Get normalized email
   const userEmail = normalizeEmail(userRecord.email);
-  
+
   if (!userEmail) {
     // No email - cannot be admin
     adminCache[supabaseId] = {
@@ -384,12 +414,12 @@ export async function checkAdminStatus(
     };
     return { isAdmin: false, user: userRecord, email: null };
   }
-  
+
   // Check admin status (whitelist OR role)
   const isInWhitelist = isAdminEmail(userEmail);
   const hasAdminRole = userRecord.role === "admin";
   const isAdmin = isInWhitelist || hasAdminRole;
-  
+
   // Auto-update role if in whitelist but role not set
   if (isInWhitelist && !hasAdminRole) {
     try {
@@ -403,14 +433,14 @@ export async function checkAdminStatus(
       console.error("[ADMIN AUTH] Error updating role:", error);
     }
   }
-  
+
   // Cache result
   adminCache[supabaseId] = {
     isAdmin,
     expiresAt: Date.now() + CACHE_TTL,
     email: userEmail
   };
-  
+
   return {
     isAdmin,
     user: userRecord,
@@ -445,7 +475,7 @@ export async function getAdminUserFromRequest(req: any): Promise<{
   if (!supabaseId) {
     return null;
   }
-  
+
   // If it looks like a token, verify it
   if (supabaseId.length > 50) {
     const verifiedId = await verifySupabaseToken(supabaseId);
@@ -453,17 +483,17 @@ export async function getAdminUserFromRequest(req: any): Promise<{
       supabaseId = verifiedId;
     }
   }
-  
+
   // Get token for syncing if needed
   const token = req.headers?.authorization?.replace(/^Bearer\s+/i, "") || undefined;
-  
+
   // Check admin status
   const { isAdmin, user, email } = await checkAdminStatus(supabaseId, undefined, token, false);
-  
+
   if (!isAdmin || !user || !email) {
     return null;
   }
-  
+
   return { user, email, supabaseId };
 }
 

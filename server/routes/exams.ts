@@ -5,6 +5,7 @@ import { eq, and, inArray, sql, count, gte, desc, or, ilike } from "drizzle-orm"
 import { formatQuestion, formatQuestionOptions } from "../utils/questionFormatter";
 import { practiceTestLimiter, examGenerationLimiter } from "../middleware/rateLimiter";
 import { safeSelectExams, safeInsertExam } from "../utils/breakProofExams";
+import { ExamLimitService } from "../services/ExamLimitService";
 
 const router = Router();
 
@@ -349,40 +350,15 @@ router.post("/exams/generate", examGenerationLimiter, async (req: Request, res: 
           // The frontend will handle showing the dialog
         }
 
-        // For Basic and Standard plans: Check daily limit
-        // Basic: 1/day, Standard: 3/day, Premium: unlimited
-        if (userPlan === "basic" || userPlan === "standard") {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const tomorrow = new Date(today);
-          tomorrow.setDate(tomorrow.getDate() + 1);
-
-          const dailyAttempts = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(attempts)
-            .where(
-              and(
-                eq(attempts.userId, user.id),
-                eq(attempts.status, "completed"),
-                gte(attempts.createdAt, today),
-                sql`${attempts.createdAt} < ${tomorrow}`
-              )
-            );
-
-          const dailyCount = Number(dailyAttempts[0]?.count || 0);
-          const dailyLimit = userPlan === "basic" ? 1 : 3; // Basic: 1, Standard: 3
-
-          if (dailyCount >= dailyLimit) {
-            const upgradeMessage = userPlan === "basic"
-              ? "Daily limit reached. Basic plan allows 1 exam per day. Upgrade to Standard (3/day) or Premium (unlimited)."
-              : "Daily limit reached. Standard plan allows 3 exams per day. Upgrade to Premium for unlimited exams.";
-            return res.status(403).json({
-              message: upgradeMessage,
-              requiresUpgrade: true,
-              dailyLimit,
-              dailyCount
-            });
-          }
+        // Check limits using ExamLimitService
+        const limitCheck = await ExamLimitService.checkGenerationLimit(user.id);
+        if (!limitCheck.allowed) {
+          return res.status(403).json({
+            message: limitCheck.reason,
+            requiresUpgrade: true,
+            limit: limitCheck.limit,
+            currentUsage: limitCheck.currentUsage
+          });
         }
 
         // Check question count limits for Basic plan
@@ -565,6 +541,11 @@ router.post("/exams/generate", examGenerationLimiter, async (req: Request, res: 
       isRandomized: true,
       status: "published",
     });
+
+    // Increment daily quota
+    if (userId) {
+      await ExamLimitService.incrementDailyQuota(userId);
+    }
 
     // Return exam with formatted questions
     return res.json({ ...exam, questions: formattedQuestions });
@@ -2078,6 +2059,10 @@ router.get("/results/:attemptId", async (req: Request, res: Response) => {
         const correctOptionId = correctAnswerMap.get(q.id);
         const isCorrect = userAnswer && correctOptionId && userAnswer === correctOptionId;
 
+        if (userAnswer) {
+          console.log(`[MARKING DEBUG] Question: ${q.id.substring(0, 8)}..., User: "${userAnswer}", Correct: "${correctOptionId}", Match: ${isCorrect}`);
+        }
+
         let options = q.options;
 
         // Try to get options from questionOptions table
@@ -2102,13 +2087,18 @@ router.get("/results/:attemptId", async (req: Request, res: Response) => {
           }
         }
 
+        const correctOption = dbOptions.find(opt => opt.optionId === correctOptionId);
+        const correctAnswerDescription = correctOption
+          ? `${correctOption.optionId}. ${correctOption.text}`
+          : correctOptionId;
+
         return {
           id: q.id,
           q: q.text,
           options: options,
           yourAnswer: userAnswer ? `${userAnswer} (${isCorrect ? "Correct" : "Incorrect"})` : "Not answered",
           // @ts-ignore
-          correctAnswer: q.correctAnswer,
+          correctAnswer: correctAnswerDescription,
           correct: isCorrect,
           // @ts-ignore
           explanation: q.explanation,
@@ -2400,6 +2390,104 @@ router.get("/stats", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("Error fetching user stats:", err);
     return res.status(500).json({ message: "Failed to fetch stats", error: err.message || String(err) });
+  }
+});
+
+
+// Download Exam Endpoint (Record download and check limits)
+router.post("/exams/:id/download", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { supabaseId } = req.body;
+
+    if (!supabaseId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.supabaseId, supabaseId),
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const exam = await db.query.exams.findFirst({
+      where: eq(exams.id, id),
+    });
+
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found" });
+    }
+
+    // Check limits
+    const limitCheck = await ExamLimitService.checkDownloadLimit(user.id);
+    if (!limitCheck.allowed) {
+      return res.status(403).json({
+        message: limitCheck.reason,
+        requiresUpgrade: true
+      });
+    }
+
+    // Record download
+    await ExamLimitService.recordDownload(user.id, exam.id);
+
+    return res.json({ success: true, message: "Download recorded" });
+  } catch (err) {
+    console.error("Error recording download:", err);
+    return res.status(500).json({ message: "Failed to record download" });
+  }
+});
+
+// Remove Download Endpoint (Free up slot)
+router.delete("/exams/:id/download", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { supabaseId } = req.query; // pass as query param for delete
+
+    if (!supabaseId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.supabaseId, supabaseId as string),
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await ExamLimitService.removeDownload(user.id, id);
+
+    return res.json({ success: true, message: "Download removed" });
+  } catch (err) {
+    console.error("Error removing download:", err);
+    return res.status(500).json({ message: "Failed to remove download" });
+  }
+});
+
+// Get user download stats
+router.get("/user/limits", async (req: Request, res: Response) => {
+  try {
+    const { supabaseId } = req.query;
+    if (!supabaseId) return res.status(401).json({ message: "Auth required" });
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.supabaseId, supabaseId as string),
+    });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Re-use logic or manual query
+    // To be efficient we can just expose the dashboard data here
+    const genLimit = await ExamLimitService.checkGenerationLimit(user.id);
+    const dlLimit = await ExamLimitService.checkDownloadLimit(user.id);
+
+    return res.json({
+      generation: genLimit,
+      download: dlLimit
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Error fetching limits" });
   }
 });
 

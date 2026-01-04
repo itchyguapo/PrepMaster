@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
@@ -6,6 +7,7 @@ import { validateEnv, getAllowedOrigins } from "./config/env";
 import { validateAdminEmailsConfig } from "./utils/adminEmails";
 import { apiLimiter } from "./middleware/rateLimiter";
 import { validateSchemaOnStartup } from "./utils/schemaValidation";
+import { CleanupService } from "./services/CleanupService";
 
 // Validate environment variables on startup
 try {
@@ -18,6 +20,12 @@ try {
 
 // Validate admin emails configuration
 validateAdminEmailsConfig();
+
+// Initialize Cleanup Service (Run on startup and every hour)
+CleanupService.runCleanup();
+setInterval(() => {
+  CleanupService.runCleanup();
+}, 60 * 60 * 1000); // 1 hour
 
 const app = express();
 const httpServer = createServer(app);

@@ -8,15 +8,15 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { 
-  ArrowRight, Target, TrendingUp, Clock, Award, BookOpen, PlayCircle, 
-  Download, Wifi, WifiOff, Lock, Crown, CheckCircle2, XCircle, 
+import {
+  ArrowRight, Target, TrendingUp, Clock, Award, BookOpen, PlayCircle,
+  Download, Wifi, WifiOff, Lock, Crown, CheckCircle2, XCircle,
   TrendingDown, Minus, Zap, BarChart3, Filter, Search, Loader2, X, Sparkles
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { 
+import {
   getAttempts, saveAttempt, ExamAttempt, isOnline,
   saveOfflineExam, getOfflineExam, getAllOfflineExams, removeOfflineExam, OfflineExam
 } from "@/lib/offlineStorage";
@@ -57,17 +57,23 @@ type UserData = {
 };
 
 type UsageData = {
+  plan: string;
   daily: {
     count: number;
     limit: number;
     remaining: number;
+    resetIn: number;
   };
-  monthly: {
+  activeExams: {
     count: number;
     limit: number;
     remaining: number;
   };
-  plan: string;
+  downloads: {
+    count: number;
+    limit: number;
+    remaining: number;
+  };
 };
 
 type PerformanceData = {
@@ -84,7 +90,7 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { user: supabaseUser, subscriptionStatus, subscriptionPlan, loading: authLoading, refreshSubscription } = useAuth();
   const [userData, setUserData] = useState<UserData | null>(null);
-  const [examBodies, setExamBodies] = useState<{id: string; name: string; tierRestriction?: string}[]>([]);
+  const [examBodies, setExamBodies] = useState<{ id: string; name: string; tierRestriction?: string }[]>([]);
   const [selectedBody, setSelectedBody] = useState<string | null>(null);
   const [subcategories] = useState<Subcategory[]>(["Science", "Arts", "Commercial"]);
   const [selectedSub, setSelectedSub] = useState<Subcategory | null>(null);
@@ -160,7 +166,7 @@ export default function Dashboard() {
   // Load usage data
   const fetchUsage = async () => {
     if (!supabaseUser || !online) return;
-    
+
     setLoadingUsage(true);
     try {
       const res = await fetch(`/api/auth/usage?supabaseId=${supabaseUser.id}`);
@@ -192,7 +198,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchPerformance = async () => {
       if (!supabaseUser || !online) return;
-      
+
       setLoadingPerformance(true);
       try {
         const res = await fetch(`/api/exams/performance?supabaseId=${supabaseUser.id}`);
@@ -226,7 +232,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       if (!supabaseUser || !online) return;
-      
+
       setLoadingStats(true);
       try {
         const res = await fetch(`/api/exams/stats?supabaseId=${supabaseUser.id}`);
@@ -257,15 +263,15 @@ export default function Dashboard() {
     // 4. Dialog is not already open
     // 5. User hasn't just selected an exam body (to prevent reopening)
     if (
-      userData && 
-      userData.subscriptionPlan === "basic" && 
-      !userData.preferredExamBody && 
-      !examBodyDialogOpen && 
+      userData &&
+      userData.subscriptionPlan === "basic" &&
+      !userData.preferredExamBody &&
+      !examBodyDialogOpen &&
       !hasSelectedExamBody
     ) {
       setExamBodyDialogOpen(true);
     }
-    
+
     // If userData has preferredExamBody, reset the flag
     if (userData?.preferredExamBody) {
       setHasSelectedExamBody(false);
@@ -324,7 +330,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchAvailableExamBodies = async () => {
       if (!online || !supabaseUser) return;
-      
+
       try {
         const res = await fetch(`/api/student/available?supabaseId=${supabaseUser.id}`);
         if (res.ok) {
@@ -347,7 +353,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchAvailableExams = async () => {
       if (!online) return;
-      
+
       try {
         const res = await fetch("/api/exams/all");
         if (res.ok) {
@@ -399,13 +405,13 @@ export default function Dashboard() {
     // Completely random logic as specified
     const categories: Subcategory[] = ["Science", "Arts", "Commercial"];
     const randomCategory = categories[Math.floor(Math.random() * categories.length)];
-    
+
     // Select random exam body if available
     let quickExamBody: string | null = null;
     if (examBodies.length > 0) {
       quickExamBody = examBodies[Math.floor(Math.random() * examBodies.length)].name;
     }
-    
+
     // Tier-based question counts for Quick Test
     let quickQuestionCount = 10; // Basic default
     if (userData?.subscriptionPlan === "standard") {
@@ -459,7 +465,7 @@ export default function Dashboard() {
           progress: 0,
           requiresPremium: false,
         };
-        
+
         // Save exam with questions to offline storage for ExamRoom to use
         if (exam.questions && exam.questions.length > 0) {
           const offlineExam: OfflineExam = {
@@ -599,7 +605,7 @@ export default function Dashboard() {
           supabaseId: supabaseUser?.id,
         }),
       });
-      
+
       if (res.ok) {
         const exam = await res.json();
         const mapped: ExamMeta = {
@@ -612,7 +618,7 @@ export default function Dashboard() {
           progress: 0,
           requiresPremium: questionCount > 50, // Premium for exams > 50 questions
         };
-        
+
         // Save exam with questions to offline storage for ExamRoom to use
         if (exam.questions && exam.questions.length > 0) {
           const offlineExam: OfflineExam = {
@@ -626,7 +632,7 @@ export default function Dashboard() {
           await saveOfflineExam(offlineExam);
           if (import.meta.env.DEV) console.log(`[TAKE EXAM] Saved ${exam.questions.length} questions to offline storage for exam ${exam.id}`);
         }
-        
+
         // Add to existing exams list
         setExams((prev) => {
           // Check if exam already exists
@@ -676,15 +682,40 @@ export default function Dashboard() {
   // Download exam for offline use
   const downloadExam = async (examId: string) => {
     if (!online) return;
-    
+
     // Check subscription before allowing download
     if (!canDownload()) {
       setUpgradeDialogOpen(true);
       return;
     }
-    
+
+    setDownloading(examId);
     setDownloading(examId);
     try {
+      if (!supabaseUser) return;
+
+      // 1. Check/Record Download Limit
+      const limitRes = await fetch(`/api/exams/${examId}/download`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ supabaseId: supabaseUser.id }),
+      });
+
+      if (!limitRes.ok) {
+        const errorData = await limitRes.json();
+        if (errorData.requiresUpgrade) {
+          setUpgradeDialogOpen(true);
+          toast({
+            title: "Download Limit Reached",
+            description: errorData.message,
+            variant: "destructive",
+          });
+          return;
+        }
+        throw new Error(errorData.message || "Failed to download exam");
+      }
+
+      // 2. Fetch Exam Content
       const supabaseIdParam = supabaseUser?.id ? `&supabaseId=${supabaseUser.id}` : "";
       const res = await fetch(`/api/questions?examId=${examId}${supabaseIdParam}`);
       if (res.ok) {
@@ -701,12 +732,31 @@ export default function Dashboard() {
           };
           await saveOfflineExam(offlineExam);
           setOfflineExams(prev => [...prev.filter(e => e.examId !== examId), offlineExam]);
+          toast({
+            title: "Download Complete",
+            description: "Exam available offline!",
+          });
+          // Refresh usage
+          void fetchUsage();
         }
       } else {
-        console.error("Failed to download exam:", res.status, res.statusText);
+        console.error("Failed to download exam content:", res.status, res.statusText);
+        toast({
+          title: "Download Failed",
+          description: "Could not fetch exam content.",
+          variant: "destructive",
+        });
+        // Rollback download record? Ideally yes, but for now we rely on user deleting or just losing 1 slot until auto-cleanup/manual delete
+        // We could implement a DELETE call here to rollback.
+        await fetch(`/api/exams/${examId}/download?supabaseId=${supabaseUser.id}`, { method: "DELETE" });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error downloading exam:", err);
+      toast({
+        title: "Download Failed",
+        description: err.message,
+        variant: "destructive",
+      });
     } finally {
       setDownloading(null);
     }
@@ -879,7 +929,7 @@ export default function Dashboard() {
                 Offline
               </Badge>
             )}
-            <Badge 
+            <Badge
               variant={subscriptionStatus === "premium" ? "default" : subscriptionStatus === "expired" ? "destructive" : "secondary"}
               className="gap-2"
             >
@@ -907,216 +957,216 @@ export default function Dashboard() {
           {/* Main Content Area - 2 columns on large screens */}
           <div className="lg:col-span-2 space-y-6">
 
-        {/* Welcome Message for New Users */}
-        {userData && !dismissedWelcome && (() => {
-          const daysSinceSignup = Math.floor((Date.now() - new Date(userData.createdAt).getTime()) / (1000 * 60 * 60 * 24));
-          const isNewUser = daysSinceSignup <= 7; // Show for first week
-          
-          if (isNewUser) {
-            return (
-              <Card className="border-primary/20 bg-primary/5">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-5 w-5 text-primary" />
-                      <CardTitle>Welcome to PrepMaster! 🎉</CardTitle>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => setDismissedWelcome(true)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <CardDescription>
-                    Get started with your exam preparation journey
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 h-2 w-2 rounded-full bg-primary" />
-                      <div>
-                        <p className="font-medium">Start with a Quick Test</p>
-                        <p className="text-sm text-muted-foreground">
-                          Click the "Quick Test" button to start practicing immediately
-                        </p>
+            {/* Welcome Message for New Users */}
+            {userData && !dismissedWelcome && (() => {
+              const daysSinceSignup = Math.floor((Date.now() - new Date(userData.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+              const isNewUser = daysSinceSignup <= 7; // Show for first week
+
+              if (isNewUser) {
+                return (
+                  <Card className="border-primary/20 bg-primary/5">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-5 w-5 text-primary" />
+                          <CardTitle>Welcome to PrepMaster! 🎉</CardTitle>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => setDismissedWelcome(true)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                       </div>
-                    </div>
-                    {userData.subscriptionPlan === "basic" && (
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 h-2 w-2 rounded-full bg-primary" />
-                        <div>
-                          <p className="font-medium">Your Basic Plan</p>
-                          <p className="text-sm text-muted-foreground">
-                            1 exam per day • 1 exam body • Up to 50 questions per exam
-                          </p>
+                      <CardDescription>
+                        Get started with your exam preparation journey
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 h-2 w-2 rounded-full bg-primary" />
+                          <div>
+                            <p className="font-medium">Start with a Quick Test</p>
+                            <p className="text-sm text-muted-foreground">
+                              Click the "Quick Test" button to start practicing immediately
+                            </p>
+                          </div>
+                        </div>
+                        {userData.subscriptionPlan === "basic" && (
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5 h-2 w-2 rounded-full bg-primary" />
+                            <div>
+                              <p className="font-medium">Your Basic Plan</p>
+                              <p className="text-sm text-muted-foreground">
+                                1 exam per day • 1 exam body • Up to 50 questions per exam
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 h-2 w-2 rounded-full bg-primary" />
+                          <div>
+                            <p className="font-medium">Explore Features</p>
+                            <p className="text-sm text-muted-foreground">
+                              Check out Practice Center, Resources, and Analytics
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    )}
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 h-2 w-2 rounded-full bg-primary" />
-                      <div>
-                        <p className="font-medium">Explore Features</p>
-                        <p className="text-sm text-muted-foreground">
-                          Check out Practice Center, Resources, and Analytics
-                        </p>
+                      <div className="flex gap-2">
+                        <Button onClick={() => handleQuickTest()} size="sm">
+                          <Zap className="mr-2 h-4 w-4" />
+                          Start Quick Test
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setLocation("/pricing")}
+                        >
+                          View Plans
+                        </Button>
                       </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button onClick={() => handleQuickTest()} size="sm">
-                      <Zap className="mr-2 h-4 w-4" />
-                      Start Quick Test
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => setLocation("/pricing")}
-                    >
-                      View Plans
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          }
-          return null;
-        })()}
+                    </CardContent>
+                  </Card>
+                );
+              }
+              return null;
+            })()}
 
-        {/* Plan Benefits Card for New Users */}
-        {userData && !dismissedWelcome && userData.subscriptionPlan === "basic" && (() => {
-          const daysSinceSignup = Math.floor((Date.now() - new Date(userData.createdAt).getTime()) / (1000 * 60 * 60 * 24));
-          const isNewUser = daysSinceSignup <= 7;
-          
-          if (isNewUser) {
-            return (
+            {/* Plan Benefits Card for New Users */}
+            {userData && !dismissedWelcome && userData.subscriptionPlan === "basic" && (() => {
+              const daysSinceSignup = Math.floor((Date.now() - new Date(userData.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+              const isNewUser = daysSinceSignup <= 7;
+
+              if (isNewUser) {
+                return (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Award className="h-5 w-5" />
+                        Your Basic Plan Benefits
+                      </CardTitle>
+                      <CardDescription>What's included in your current plan</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="flex items-start gap-3">
+                          <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="font-medium">1 Exam Per Day</p>
+                            <p className="text-sm text-muted-foreground">Practice with daily exam limit</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="font-medium">1 Exam Body</p>
+                            <p className="text-sm text-muted-foreground">Choose WAEC or JAMB</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="font-medium">Up to 50 Questions</p>
+                            <p className="text-sm text-muted-foreground">Per exam</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-4 pt-4 border-t">
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Want more? Upgrade to Standard or Premium for unlimited exams, offline downloads, and more features.
+                        </p>
+                        <Button variant="outline" size="sm" onClick={() => setLocation("/pricing")}>
+                          View Upgrade Options
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              }
+              return null;
+            })()}
+
+            {/* Subscription Expiry Warning */}
+            {userData?.subscriptionExpiresAt && subscriptionStatus === "premium" && (() => {
+              const expiryDate = new Date(userData.subscriptionExpiresAt);
+              const daysUntilExpiry = Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+
+              if (daysUntilExpiry <= 7 && daysUntilExpiry > 0) {
+                return (
+                  <Alert className="border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20">
+                    <AlertDescription className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-yellow-600" />
+                        <span className="text-yellow-800 dark:text-yellow-200">
+                          Your subscription expires in {daysUntilExpiry} {daysUntilExpiry === 1 ? "day" : "days"} ({expiryDate.toLocaleDateString()})
+                        </span>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => setLocation("/pricing")}>
+                        Renew Now
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                );
+              }
+              return null;
+            })()}
+
+            {/* User Info Card */}
+            {userData && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Award className="h-5 w-5" />
-                    Your Basic Plan Benefits
-                  </CardTitle>
-                  <CardDescription>What's included in your current plan</CardDescription>
+                  <CardTitle>Account Information</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="font-medium">1 Exam Per Day</p>
-                        <p className="text-sm text-muted-foreground">Practice with daily exam limit</p>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Username</p>
+                      <p className="font-medium">{userData.username}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Email</p>
+                      <p className="font-medium">{userData.email || "Not set"}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Subscription</p>
+                      <p className="font-medium capitalize">
+                        {userData.subscriptionPlan || subscriptionStatus}
+                        {userData.subscriptionExpiresAt && subscriptionStatus === "premium" && (
+                          <span className="text-xs text-muted-foreground block">
+                            Expires {new Date(userData.subscriptionExpiresAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </p>
+                      {userData.subscriptionPlan === "basic" && userData.preferredExamBody && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Access: {userData.preferredExamBody} only
+                        </p>
+                      )}
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {userData.subscriptionPlan === "basic" ? (
+                          <span className="text-blue-600 dark:text-blue-400">✓ Exam access (1 per day)</span>
+                        ) : userData.canAccessExams ? (
+                          <span className="text-green-600 dark:text-green-400">✓ Exam access enabled (unlimited)</span>
+                        ) : (
+                          <span className="text-yellow-600 dark:text-yellow-400">✗ Exam access locked</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {userData.canDownloadOffline ? (
+                          <span className="text-green-600 dark:text-green-400">✓ Offline downloads enabled</span>
+                        ) : (
+                          <span className="text-yellow-600 dark:text-yellow-400">✗ Offline downloads locked</span>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="font-medium">1 Exam Body</p>
-                        <p className="text-sm text-muted-foreground">Choose WAEC or JAMB</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="font-medium">Up to 50 Questions</p>
-                        <p className="text-sm text-muted-foreground">Per exam</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-4 pt-4 border-t">
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Want more? Upgrade to Standard or Premium for unlimited exams, offline downloads, and more features.
-                    </p>
-                    <Button variant="outline" size="sm" onClick={() => setLocation("/pricing")}>
-                      View Upgrade Options
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
-            );
-          }
-          return null;
-        })()}
-
-        {/* Subscription Expiry Warning */}
-        {userData?.subscriptionExpiresAt && subscriptionStatus === "premium" && (() => {
-          const expiryDate = new Date(userData.subscriptionExpiresAt);
-          const daysUntilExpiry = Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-          
-          if (daysUntilExpiry <= 7 && daysUntilExpiry > 0) {
-            return (
-              <Alert className="border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20">
-                <AlertDescription className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-yellow-600" />
-                    <span className="text-yellow-800 dark:text-yellow-200">
-                      Your subscription expires in {daysUntilExpiry} {daysUntilExpiry === 1 ? "day" : "days"} ({expiryDate.toLocaleDateString()})
-                    </span>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => setLocation("/pricing")}>
-                    Renew Now
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            );
-          }
-          return null;
-        })()}
-
-        {/* User Info Card */}
-        {userData && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Account Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Username</p>
-                  <p className="font-medium">{userData.username}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Email</p>
-                  <p className="font-medium">{userData.email || "Not set"}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Subscription</p>
-                  <p className="font-medium capitalize">
-                    {userData.subscriptionPlan || subscriptionStatus}
-                    {userData.subscriptionExpiresAt && subscriptionStatus === "premium" && (
-                      <span className="text-xs text-muted-foreground block">
-                        Expires {new Date(userData.subscriptionExpiresAt).toLocaleDateString()}
-                      </span>
-                    )}
-                  </p>
-                  {userData.subscriptionPlan === "basic" && userData.preferredExamBody && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Access: {userData.preferredExamBody} only
-                    </p>
-                  )}
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {userData.subscriptionPlan === "basic" ? (
-                      <span className="text-blue-600 dark:text-blue-400">✓ Exam access (1 per day)</span>
-                    ) : userData.canAccessExams ? (
-                      <span className="text-green-600 dark:text-green-400">✓ Exam access enabled (unlimited)</span>
-                    ) : (
-                      <span className="text-yellow-600 dark:text-yellow-400">✗ Exam access locked</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {userData.canDownloadOffline ? (
-                      <span className="text-green-600 dark:text-green-400">✓ Offline downloads enabled</span>
-                    ) : (
-                      <span className="text-yellow-600 dark:text-yellow-400">✗ Offline downloads locked</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+            )}
 
             {/* Featured Exam Generation Section */}
             <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 via-background to-primary/5 shadow-lg">
@@ -1237,13 +1287,12 @@ export default function Dashboard() {
                 {/* Generate Button */}
                 {selectedBody && selectedSub && (
                   <div className="flex items-center gap-4 pt-2 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                    <Button 
-                      onClick={() => handleButtonPress("generate-exam", generateExam)} 
+                    <Button
+                      onClick={() => handleButtonPress("generate-exam", generateExam)}
                       disabled={generating || !online}
                       size="lg"
-                      className={`flex-1 h-12 text-base font-semibold transition-all duration-200 hover:scale-[1.02] active:scale-95 ${
-                        pressedButtons.has("generate-exam") ? "scale-95 shadow-inner" : ""
-                      } ${generating ? "bg-primary/90" : ""}`}
+                      className={`flex-1 h-12 text-base font-semibold transition-all duration-200 hover:scale-[1.02] active:scale-95 ${pressedButtons.has("generate-exam") ? "scale-95 shadow-inner" : ""
+                        } ${generating ? "bg-primary/90" : ""}`}
                     >
                       {generating ? (
                         <>
@@ -1278,9 +1327,9 @@ export default function Dashboard() {
                         1 exam per day • Up to 50 questions per exam
                       </p>
                     </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => setLocation("/pricing")}
                       className="shrink-0"
                     >
@@ -1292,340 +1341,335 @@ export default function Dashboard() {
             </Card>
 
             {/* Main Content Tabs */}
-        <Tabs defaultValue="available" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="available">Available Exams</TabsTrigger>
-            <TabsTrigger value="offline">Offline Exams</TabsTrigger>
-            <TabsTrigger value="results" id="results-tab">Results</TabsTrigger>
-          </TabsList>
+            <Tabs defaultValue="available" className="space-y-4">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="available">Available Exams</TabsTrigger>
+                <TabsTrigger value="offline">Offline Exams</TabsTrigger>
+                <TabsTrigger value="results" id="results-tab">Results</TabsTrigger>
+              </TabsList>
 
-          <TabsContent value="available" className="space-y-4">
-            {/* Available Exams from Database */}
-            {exams.length > 0 && (
-              <div>
-                <h2 className="text-xl font-semibold mb-4">Available Exams</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                  {examsWithStatus.map((exam) => {
-                    const canDownloadExam = canDownload();
-                    const isDownloaded = offlineExams.some(e => e.examId === exam.id);
-                    
-                    return (
-                      <Card key={exam.id}>
-                        <CardHeader>
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <CardTitle className="text-lg">{exam.title}</CardTitle>
-                              <CardDescription>{exam.subject} - {exam.subcategory}</CardDescription>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <Badge variant={exam.status === "completed" ? "secondary" : "default"}>
-                              {exam.status.replace("_", " ").toUpperCase()}
-                            </Badge>
-                            {isDownloaded && (
-                              <Badge variant="outline" className="gap-1">
-                                <Download className="h-3 w-3" />
-                                Downloaded
-                              </Badge>
-                            )}
-                          </div>
-                          {exam.progress > 0 && <Progress value={exam.progress} />}
-                          {userData?.subscriptionPlan === "basic" && (
-                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-2 text-sm text-blue-800 dark:text-blue-200">
-                              <Clock className="h-3 w-3 inline mr-1" />
-                              Basic plan: 1 exam per day limit
-                            </div>
-                          )}
-                          <div className="flex gap-2">
-                            <Button
-                              onClick={() => isExamMeta(exam) && handleButtonPress(`start-generated-${exam.id}`, () => handleStartExam(exam))}
-                              className={`flex-1 transition-all duration-200 hover:scale-105 active:scale-95 ${
-                                pressedButtons.has(`start-generated-${exam.id}`) ? "scale-95 shadow-inner" : ""
-                              }`}
-                              size="sm"
-                            >
-                              {exam.status === "in_progress" ? (
-                                <>
-                                  <PlayCircle className="h-4 w-4 mr-1" />
-                                  Continue
-                                </>
-                              ) : (
-                                <>
-                                  <PlayCircle className="h-4 w-4 mr-1" />
-                                  Start
-                                </>
-                              )}
-                            </Button>
-                            {online && !isDownloaded && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleButtonPress(`download-${exam.id}`, () => downloadExam(exam.id))}
-                                disabled={downloading === exam.id || !canDownloadExam}
-                                title={!canDownloadExam ? "Standard or Premium plan required for offline downloads" : ""}
-                                className={`transition-all duration-200 hover:scale-105 active:scale-95 ${
-                                  pressedButtons.has(`download-${exam.id}`) ? "scale-95 shadow-inner" : ""
-                                }`}
-                              >
-                                {downloading === exam.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : !canDownloadExam ? (
-                                  <Lock className="h-4 w-4" />
-                                ) : (
-                                  <Download className="h-4 w-4" />
+              <TabsContent value="available" className="space-y-4">
+                {/* Available Exams from Database */}
+                {exams.length > 0 && (
+                  <div>
+                    <h2 className="text-xl font-semibold mb-4">Available Exams</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                      {examsWithStatus.map((exam) => {
+                        const canDownloadExam = canDownload();
+                        const isDownloaded = offlineExams.some(e => e.examId === exam.id);
+
+                        return (
+                          <Card key={exam.id}>
+                            <CardHeader>
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <CardTitle className="text-lg">{exam.title}</CardTitle>
+                                  <CardDescription>{exam.subject} - {exam.subcategory}</CardDescription>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                <Badge variant={exam.status === "completed" ? "secondary" : "default"}>
+                                  {exam.status.replace("_", " ").toUpperCase()}
+                                </Badge>
+                                {isDownloaded && (
+                                  <Badge variant="outline" className="gap-1">
+                                    <Download className="h-3 w-3" />
+                                    Downloaded
+                                  </Badge>
                                 )}
-                              </Button>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-
-            {/* Generated Exams - This section shows exams generated via the form above */}
-            {examsWithStatus.length > 0 && examsWithStatus.some(e => !exams.find(ex => ex.id === e.id)) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {examsWithStatus
-                  .filter(exam => !exams.find(e => e.id === exam.id))
-                  .map((exam) => {
-                    const canDownloadExam = canDownload();
-                    const isDownloaded = offlineExams.some(e => e.examId === exam.id);
-                    
-                    return (
-                      <Card key={exam.id}>
-                        <CardHeader>
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <CardTitle className="text-lg">{exam.title}</CardTitle>
-                              <CardDescription>{exam.subject} - {exam.subcategory}</CardDescription>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <Badge variant={exam.status === "completed" ? "secondary" : "default"}>
-                              {exam.status.replace("_", " ").toUpperCase()}
-                            </Badge>
-                            {isDownloaded && (
-                              <Badge variant="outline" className="gap-1">
-                                <Download className="h-3 w-3" />
-                                Downloaded
-                              </Badge>
-                            )}
-                          </div>
-                          {exam.progress > 0 && <Progress value={exam.progress} />}
-                          {userData?.subscriptionPlan === "basic" && (
-                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-2 text-sm text-blue-800 dark:text-blue-200">
-                              <Clock className="h-3 w-3 inline mr-1" />
-                              Basic plan: 1 exam per day limit
-                            </div>
-                          )}
-                          <div className="flex gap-2">
-                            <Button
-                              onClick={() => isExamMeta(exam) && handleButtonPress(`start-generated-${exam.id}`, () => handleStartExam(exam))}
-                              className={`flex-1 transition-all duration-200 hover:scale-105 active:scale-95 ${
-                                pressedButtons.has(`start-generated-${exam.id}`) ? "scale-95 shadow-inner" : ""
-                              }`}
-                              size="sm"
-                            >
-                              {exam.status === "in_progress" ? (
-                                <>
-                                  <PlayCircle className="h-4 w-4 mr-1" />
-                                  Continue
-                                </>
-                              ) : (
-                                <>
-                                  <PlayCircle className="h-4 w-4 mr-1" />
-                                  Start
-                                </>
+                              </div>
+                              {exam.progress > 0 && <Progress value={exam.progress} />}
+                              {userData?.subscriptionPlan === "basic" && (
+                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-2 text-sm text-blue-800 dark:text-blue-200">
+                                  <Clock className="h-3 w-3 inline mr-1" />
+                                  Basic plan: 1 exam per day limit
+                                </div>
                               )}
-                            </Button>
-                            {online && !isDownloaded && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleButtonPress(`download-generated-${exam.id}`, () => downloadExam(exam.id))}
-                                disabled={downloading === exam.id || !canDownloadExam}
-                                title={!canDownloadExam ? "Standard or Premium plan required for offline downloads" : ""}
-                                className={`transition-all duration-200 hover:scale-105 active:scale-95 ${
-                                  pressedButtons.has(`download-generated-${exam.id}`) ? "scale-95 shadow-inner" : ""
-                                }`}
-                              >
-                                {downloading === exam.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : !canDownloadExam ? (
-                                  <Lock className="h-4 w-4" />
-                                ) : (
-                                  <Download className="h-4 w-4" />
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={() => isExamMeta(exam) && handleButtonPress(`start-generated-${exam.id}`, () => handleStartExam(exam))}
+                                  className={`flex-1 transition-all duration-200 hover:scale-105 active:scale-95 ${pressedButtons.has(`start-generated-${exam.id}`) ? "scale-95 shadow-inner" : ""
+                                    }`}
+                                  size="sm"
+                                >
+                                  {exam.status === "in_progress" ? (
+                                    <>
+                                      <PlayCircle className="h-4 w-4 mr-1" />
+                                      Continue
+                                    </>
+                                  ) : (
+                                    <>
+                                      <PlayCircle className="h-4 w-4 mr-1" />
+                                      Start
+                                    </>
+                                  )}
+                                </Button>
+                                {online && !isDownloaded && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleButtonPress(`download-${exam.id}`, () => downloadExam(exam.id))}
+                                    disabled={downloading === exam.id || !canDownloadExam}
+                                    title={!canDownloadExam ? "Standard or Premium plan required for offline downloads" : ""}
+                                    className={`transition-all duration-200 hover:scale-105 active:scale-95 ${pressedButtons.has(`download-${exam.id}`) ? "scale-95 shadow-inner" : ""
+                                      }`}
+                                  >
+                                    {downloading === exam.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : !canDownloadExam ? (
+                                      <Lock className="h-4 w-4" />
+                                    ) : (
+                                      <Download className="h-4 w-4" />
+                                    )}
+                                  </Button>
                                 )}
-                              </Button>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-              </div>
-            )}
-          </TabsContent>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
-          <TabsContent value="offline" className="space-y-4">
-            {offlineExams.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <Download className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No offline exams downloaded yet</p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Download exams when online to practice offline
-                  </p>
-                  {!canDownload() && (
-                    <Button className="mt-4" onClick={() => setUpgradeDialogOpen(true)}>
-                      Upgrade to Download Exams
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-sm text-muted-foreground">
-                    {offlineExams.length} exam{offlineExams.length !== 1 ? 's' : ''} downloaded
-                  </p>
-                  {offlineExams.length > 1 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        if (confirm(`Delete all ${offlineExams.length} offline exam(s)?`)) {
-                          for (const exam of offlineExams) {
-                            await removeOfflineExam(exam.examId);
-                          }
-                          setOfflineExams([]);
-                          toast({
-                            title: "Offline Exams Deleted",
-                            description: "All offline exams have been removed.",
-                          });
-                        }
-                      }}
-                    >
-                      Delete All
-                    </Button>
-                  )}
-                </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {offlineExams.map((exam) => (
-                  <Card key={exam.examId}>
-                    <CardHeader>
-                      <CardTitle className="text-lg">{exam.title}</CardTitle>
-                      <CardDescription>{exam.examBody} - {exam.subcategory}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Download className="h-4 w-4" />
-                        {exam.questions.length} questions
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="h-4 w-4" />
-                        Downloaded {new Date(exam.downloadedAt).toLocaleDateString()}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={() => handleButtonPress(`start-offline-${exam.examId}`, () => handleStartOfflineExam(exam))}
-                          className={`flex-1 transition-all duration-200 hover:scale-105 active:scale-95 ${
-                            pressedButtons.has(`start-offline-${exam.examId}`) ? "scale-95 shadow-inner" : ""
-                          }`}
-                          size="sm"
-                        >
-                          <PlayCircle className="h-4 w-4 mr-1" />
-                          Start Exam
+
+                {/* Generated Exams - This section shows exams generated via the form above */}
+                {examsWithStatus.length > 0 && examsWithStatus.some(e => !exams.find(ex => ex.id === e.id)) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {examsWithStatus
+                      .filter(exam => !exams.find(e => e.id === exam.id))
+                      .map((exam) => {
+                        const canDownloadExam = canDownload();
+                        const isDownloaded = offlineExams.some(e => e.examId === exam.id);
+
+                        return (
+                          <Card key={exam.id}>
+                            <CardHeader>
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <CardTitle className="text-lg">{exam.title}</CardTitle>
+                                  <CardDescription>{exam.subject} - {exam.subcategory}</CardDescription>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                <Badge variant={exam.status === "completed" ? "secondary" : "default"}>
+                                  {exam.status.replace("_", " ").toUpperCase()}
+                                </Badge>
+                                {isDownloaded && (
+                                  <Badge variant="outline" className="gap-1">
+                                    <Download className="h-3 w-3" />
+                                    Downloaded
+                                  </Badge>
+                                )}
+                              </div>
+                              {exam.progress > 0 && <Progress value={exam.progress} />}
+                              {userData?.subscriptionPlan === "basic" && (
+                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-2 text-sm text-blue-800 dark:text-blue-200">
+                                  <Clock className="h-3 w-3 inline mr-1" />
+                                  Basic plan: 1 exam per day limit
+                                </div>
+                              )}
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={() => isExamMeta(exam) && handleButtonPress(`start-generated-${exam.id}`, () => handleStartExam(exam))}
+                                  className={`flex-1 transition-all duration-200 hover:scale-105 active:scale-95 ${pressedButtons.has(`start-generated-${exam.id}`) ? "scale-95 shadow-inner" : ""
+                                    }`}
+                                  size="sm"
+                                >
+                                  {exam.status === "in_progress" ? (
+                                    <>
+                                      <PlayCircle className="h-4 w-4 mr-1" />
+                                      Continue
+                                    </>
+                                  ) : (
+                                    <>
+                                      <PlayCircle className="h-4 w-4 mr-1" />
+                                      Start
+                                    </>
+                                  )}
+                                </Button>
+                                {online && !isDownloaded && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleButtonPress(`download-generated-${exam.id}`, () => downloadExam(exam.id))}
+                                    disabled={downloading === exam.id || !canDownloadExam}
+                                    title={!canDownloadExam ? "Standard or Premium plan required for offline downloads" : ""}
+                                    className={`transition-all duration-200 hover:scale-105 active:scale-95 ${pressedButtons.has(`download-generated-${exam.id}`) ? "scale-95 shadow-inner" : ""
+                                      }`}
+                                  >
+                                    {downloading === exam.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : !canDownloadExam ? (
+                                      <Lock className="h-4 w-4" />
+                                    ) : (
+                                      <Download className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="offline" className="space-y-4">
+                {offlineExams.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <Download className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No offline exams downloaded yet</p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Download exams when online to practice offline
+                      </p>
+                      {!canDownload() && (
+                        <Button className="mt-4" onClick={() => setUpgradeDialogOpen(true)}>
+                          Upgrade to Download Exams
                         </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-sm text-muted-foreground">
+                        {offlineExams.length} exam{offlineExams.length !== 1 ? 's' : ''} downloaded
+                      </p>
+                      {offlineExams.length > 1 && (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={async () => {
-                            if (confirm(`Delete "${exam.title}"?`)) {
-                              await removeOfflineExam(exam.examId);
-                              setOfflineExams(prev => prev.filter(e => e.examId !== exam.examId));
+                            if (confirm(`Delete all ${offlineExams.length} offline exam(s)?`)) {
+                              for (const exam of offlineExams) {
+                                await removeOfflineExam(exam.examId);
+                              }
+                              setOfflineExams([]);
                               toast({
-                                title: "Exam Deleted",
-                                description: "Offline exam has been removed.",
+                                title: "Offline Exams Deleted",
+                                description: "All offline exams have been removed.",
                               });
                             }
                           }}
                         >
-                          <XCircle className="h-4 w-4" />
+                          Delete All
                         </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-              </>
-            )}
-          </TabsContent>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {offlineExams.map((exam) => (
+                        <Card key={exam.examId}>
+                          <CardHeader>
+                            <CardTitle className="text-lg">{exam.title}</CardTitle>
+                            <CardDescription>{exam.examBody} - {exam.subcategory}</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Download className="h-4 w-4" />
+                              {exam.questions.length} questions
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Clock className="h-4 w-4" />
+                              Downloaded {new Date(exam.downloadedAt).toLocaleDateString()}
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => handleButtonPress(`start-offline-${exam.examId}`, () => handleStartOfflineExam(exam))}
+                                className={`flex-1 transition-all duration-200 hover:scale-105 active:scale-95 ${pressedButtons.has(`start-offline-${exam.examId}`) ? "scale-95 shadow-inner" : ""
+                                  }`}
+                                size="sm"
+                              >
+                                <PlayCircle className="h-4 w-4 mr-1" />
+                                Start Exam
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  if (confirm(`Delete "${exam.title}"?`)) {
+                                    await removeOfflineExam(exam.examId);
+                                    setOfflineExams(prev => prev.filter(e => e.examId !== exam.examId));
+                                    toast({
+                                      title: "Exam Deleted",
+                                      description: "Offline exam has been removed.",
+                                    });
+                                  }
+                                }}
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </TabsContent>
 
-          <TabsContent value="results" className="space-y-4">
-            {completedAttempts.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <Award className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No completed exams yet</p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Complete an exam to see your results here
-                  </p>
-                  <Button className="mt-4" onClick={() => {
-                    const element = document.getElementById("generate-exam-section");
-                    element?.scrollIntoView({ behavior: "smooth" });
-                  }}>
-                    Start Your First Exam
-                  </Button>
-                  {userData?.subscriptionPlan === "basic" && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Basic plan: 1 exam per day limit
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {completedAttempts.map((attempt) => (
-                  <Card key={attempt.id} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setLocation("/results")}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle>Exam Attempt</CardTitle>
-                        <Badge variant="secondary">Completed</Badge>
-                      </div>
-                      <CardDescription>
-                        Completed {attempt.completedAt ? new Date(attempt.completedAt).toLocaleString() : "Recently"}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Score</p>
-                          <p className="text-2xl font-bold">
-                            {attempt.score !== undefined 
-                              ? `${Math.round((attempt.score / (attempt.totalQuestions || 1)) * 100)}%`
-                              : "N/A"}
-                          </p>
-                        </div>
-                        <Button variant="outline" size="sm">
-                          View Details <ArrowRight className="ml-2 h-4 w-4" />
-                        </Button>
-                      </div>
+              <TabsContent value="results" className="space-y-4">
+                {completedAttempts.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <Award className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No completed exams yet</p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Complete an exam to see your results here
+                      </p>
+                      <Button className="mt-4" onClick={() => {
+                        const element = document.getElementById("generate-exam-section");
+                        element?.scrollIntoView({ behavior: "smooth" });
+                      }}>
+                        Start Your First Exam
+                      </Button>
+                      {userData?.subscriptionPlan === "basic" && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Basic plan: 1 exam per day limit
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+                ) : (
+                  <div className="space-y-4">
+                    {completedAttempts.map((attempt) => (
+                      <Card key={attempt.id} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setLocation("/results")}>
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <CardTitle>Exam Attempt</CardTitle>
+                            <Badge variant="secondary">Completed</Badge>
+                          </div>
+                          <CardDescription>
+                            Completed {attempt.completedAt ? new Date(attempt.completedAt).toLocaleString() : "Recently"}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm text-muted-foreground">Score</p>
+                              <p className="text-2xl font-bold">
+                                {attempt.score !== undefined
+                                  ? `${Math.round((attempt.score / (attempt.totalQuestions || 1)) * 100)}%`
+                                  : "N/A"}
+                              </p>
+                            </div>
+                            <Button variant="outline" size="sm">
+                              View Details <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
 
           {/* Right Sidebar - Stats, Usage, Quick Actions */}
@@ -1638,9 +1682,8 @@ export default function Dashboard() {
               <CardContent className="space-y-2">
                 <Button
                   variant="outline"
-                  className={`w-full justify-start h-auto py-3 transition-all duration-200 hover:scale-[1.02] hover:shadow-md active:scale-95 ${
-                    pressedButtons.has("quick-test") ? "scale-95 shadow-inner bg-primary/10" : ""
-                  } ${generating ? "bg-primary/5 border-primary/30" : ""}`}
+                  className={`w-full justify-start h-auto py-3 transition-all duration-200 hover:scale-[1.02] hover:shadow-md active:scale-95 ${pressedButtons.has("quick-test") ? "scale-95 shadow-inner bg-primary/10" : ""
+                    } ${generating ? "bg-primary/5 border-primary/30" : ""}`}
                   onClick={() => handleButtonPress("quick-test", handleQuickTest)}
                   disabled={generating || !online || loadingUserData}
                 >
@@ -1658,9 +1701,8 @@ export default function Dashboard() {
                 </Button>
                 <Button
                   variant="outline"
-                  className={`w-full justify-start h-auto py-3 transition-all duration-200 hover:scale-[1.02] hover:shadow-md active:scale-95 ${
-                    pressedButtons.has("analytics") ? "scale-95 shadow-inner bg-primary/10" : ""
-                  }`}
+                  className={`w-full justify-start h-auto py-3 transition-all duration-200 hover:scale-[1.02] hover:shadow-md active:scale-95 ${pressedButtons.has("analytics") ? "scale-95 shadow-inner bg-primary/10" : ""
+                    }`}
                   onClick={() => handleButtonPress("analytics", () => setLocation("/analytics"))}
                 >
                   <BarChart3 className={`h-4 w-4 mr-2 transition-transform ${pressedButtons.has("analytics") ? "scale-90" : ""}`} />
@@ -1668,9 +1710,8 @@ export default function Dashboard() {
                 </Button>
                 <Button
                   variant="outline"
-                  className={`w-full justify-start h-auto py-3 transition-all duration-200 hover:scale-[1.02] hover:shadow-md active:scale-95 ${
-                    pressedButtons.has("results") ? "scale-95 shadow-inner bg-primary/10" : ""
-                  }`}
+                  className={`w-full justify-start h-auto py-3 transition-all duration-200 hover:scale-[1.02] hover:shadow-md active:scale-95 ${pressedButtons.has("results") ? "scale-95 shadow-inner bg-primary/10" : ""
+                    }`}
                   onClick={() => handleButtonPress("results", () => {
                     const element = document.getElementById("results-tab");
                     element?.click();
@@ -1681,9 +1722,8 @@ export default function Dashboard() {
                 </Button>
                 <Button
                   variant="outline"
-                  className={`w-full justify-start h-auto py-3 transition-all duration-200 hover:scale-[1.02] hover:shadow-md active:scale-95 ${
-                    pressedButtons.has("settings") ? "scale-95 shadow-inner bg-primary/10" : ""
-                  }`}
+                  className={`w-full justify-start h-auto py-3 transition-all duration-200 hover:scale-[1.02] hover:shadow-md active:scale-95 ${pressedButtons.has("settings") ? "scale-95 shadow-inner bg-primary/10" : ""
+                    }`}
                   onClick={() => handleButtonPress("settings", () => setLocation("/settings"))}
                 >
                   <BookOpen className={`h-4 w-4 mr-2 transition-transform ${pressedButtons.has("settings") ? "scale-90" : ""}`} />
@@ -1748,76 +1788,72 @@ export default function Dashboard() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Target className="h-5 w-5 text-primary" />
-                    Usage Statistics
+                    Account Limits
                   </CardTitle>
-                  <CardDescription className="text-xs">
-                    {usageData.plan === "basic" 
-                      ? "Your daily and monthly exam limits" 
-                      : "Your exam activity this period"}
+                  <CardDescription className="text-xs capitalize">
+                    {usageData.plan} Plan Overview
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+
+                  {/* Daily Quota */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold">Daily Exams</span>
-                      <span className="text-sm font-bold text-foreground">
-                        {usageData.daily.count} {usageData.daily.limit === Infinity ? "" : `/ ${usageData.daily.limit}`}
-                        {usageData.daily.limit === Infinity && <span className="text-green-600 ml-1 text-xs">(∞)</span>}
+                      <span className="text-xs font-semibold">Daily Generations</span>
+                      <span className="text-xs font-bold text-foreground">
+                        {usageData.daily.count} {usageData.daily.limit >= 100 ? "" : `/ ${usageData.daily.limit}`}
+                        {usageData.daily.limit >= 100 && <span className="text-green-600 ml-1 text-xs">(∞)</span>}
                       </span>
                     </div>
-                    {usageData.daily.limit !== Infinity ? (
-                      <>
-                        <Progress 
-                          value={(usageData.daily.count / usageData.daily.limit) * 100} 
-                          className="h-2.5"
-                        />
-                        {usageData.daily.remaining === 0 && (
-                          <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1.5 flex items-center gap-1">
-                            <XCircle className="h-3 w-3" />
-                            Daily limit reached
-                          </p>
-                        )}
-                        {usageData.daily.remaining > 0 && (
-                          <p className="text-xs text-muted-foreground mt-1.5">
-                            {usageData.daily.remaining} remaining today
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <div className="h-2.5 bg-green-100 dark:bg-green-900/20 rounded-full" />
-                    )}
+                    <Progress
+                      value={(usageData.daily.count / (usageData.daily.limit >= 100 ? 100 : usageData.daily.limit)) * 100}
+                      className="h-2"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1 text-right">
+                      {usageData.daily.resetIn > 0 ? `Resets in ${Math.ceil(usageData.daily.resetIn / (1000 * 60 * 60))}h` : "Resets soon"}
+                    </p>
                   </div>
+
+                  {/* Active Exams */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold">Monthly Exams</span>
-                      <span className="text-sm font-bold text-foreground">
-                        {usageData.monthly.count} {usageData.monthly.limit === Infinity ? "" : `/ ${usageData.monthly.limit}`}
-                        {usageData.monthly.limit === Infinity && <span className="text-green-600 ml-1 text-xs">(∞)</span>}
+                      <span className="text-xs font-semibold">Active Exams</span>
+                      <span className="text-xs font-bold text-foreground">
+                        {usageData.activeExams.count} / {usageData.activeExams.limit}
                       </span>
                     </div>
-                    {usageData.monthly.limit !== Infinity ? (
-                      <>
-                        <Progress 
-                          value={(usageData.monthly.count / usageData.monthly.limit) * 100} 
-                          className="h-2.5"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1.5">
-                          {usageData.monthly.remaining} remaining this month
-                        </p>
-                      </>
-                    ) : (
-                      <div className="h-2.5 bg-green-100 dark:bg-green-900/20 rounded-full" />
+                    <Progress
+                      value={(usageData.activeExams.count / usageData.activeExams.limit) * 100}
+                      className={`h-2 ${usageData.activeExams.remaining === 0 ? "bg-red-100 dark:bg-red-900/20" : ""}`}
+                    />
+                  </div>
+
+                  {/* Downloads */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold">Offline Downloads</span>
+                      <span className="text-xs font-bold text-foreground">
+                        {usageData.downloads.count} / {usageData.downloads.limit}
+                      </span>
+                    </div>
+                    <Progress
+                      value={usageData.downloads.limit > 0 ? (usageData.downloads.count / usageData.downloads.limit) * 100 : 100}
+                      className="h-2"
+                    />
+                    {usageData.downloads.limit === 0 && (
+                      <p className="text-[10px] text-red-500 mt-1">Not available on Basic plan</p>
                     )}
                   </div>
-                  {usageData.plan === "basic" && usageData.daily.remaining === 0 && (
+
+                  {usageData.plan === "basic" && (
                     <Button className="w-full" size="sm" onClick={() => setLocation("/pricing")}>
-                      Upgrade for Unlimited
+                      Upgrade Limits
                     </Button>
                   )}
                   {usageData.plan !== "basic" && (
                     <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-2 rounded-md">
                       <CheckCircle2 className="h-3 w-3" />
-                      <span>Unlimited access with {usageData.plan} plan</span>
+                      <span>{usageData.plan === "premium" ? "Premium Access" : "Standard Access"}</span>
                     </div>
                   )}
                 </CardContent>
@@ -1935,8 +1971,8 @@ export default function Dashboard() {
       </div>
 
       {/* Exam Body Selection Dialog for Basic Plan */}
-      <Dialog 
-        open={examBodyDialogOpen} 
+      <Dialog
+        open={examBodyDialogOpen}
         onOpenChange={(open) => {
           // Allow closing if user has selected an exam body or if it's not a basic user
           if (!open) {

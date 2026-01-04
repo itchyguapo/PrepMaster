@@ -10,7 +10,7 @@ export async function adminFetch(
 ): Promise<Response> {
   try {
     const user = await getCurrentUser();
-    
+
     if (!user) {
       throw new Error("User not authenticated");
     }
@@ -26,7 +26,7 @@ export async function adminFetch(
     // Merge headers
     const headers = new Headers(options.headers);
     headers.set("Content-Type", "application/json");
-    
+
     // Add Bearer token if available (preferred authentication method)
     if (accessToken) {
       headers.set("Authorization", `Bearer ${accessToken}`);
@@ -41,13 +41,15 @@ export async function adminFetch(
     if (!response.ok) {
       let errorData: any = {};
       try {
-        const errorText = await response.text();
+        // Clone the response so we can read the body without consuming the original stream
+        const clonedResponse = response.clone();
+        const errorText = await clonedResponse.text();
         errorData = {
           status: response.status,
           statusText: response.statusText,
           error: errorText
         };
-        
+
         // Try to parse as JSON
         try {
           errorData.parsed = JSON.parse(errorText);
@@ -61,7 +63,7 @@ export async function adminFetch(
           error: "Unknown error"
         };
       }
-      
+
       console.error(`[ADMIN API] Request failed: ${url}`, errorData);
     }
 

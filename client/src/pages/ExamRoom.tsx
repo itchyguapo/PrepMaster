@@ -112,7 +112,7 @@ export default function ExamRoom() {
       }
 
       setLoading(true);
-      
+
       // First, try to load from offline storage
       const offlineExam = await getOfflineExam(examId);
       if (offlineExam && offlineExam.questions) {
@@ -137,7 +137,7 @@ export default function ExamRoom() {
             "Content-Type": "application/json",
           },
         });
-        
+
         if (!res.ok) {
           const errorText = await res.text();
           let errorData;
@@ -151,9 +151,9 @@ export default function ExamRoom() {
           setLoading(false);
           return;
         }
-        
+
         const data = await res.json();
-        
+
         if (data.questions && Array.isArray(data.questions) && data.questions.length > 0) {
           // The backend should already return properly formatted questions with options
           // Only do minimal validation and fallback formatting if needed
@@ -210,7 +210,7 @@ export default function ExamRoom() {
         setLoading(false);
       }
     };
-    
+
     if (!checkingAccess && canAccessExam) {
       void fetchQuestions();
     } else if (!checkingAccess && !canAccessExam) {
@@ -435,14 +435,14 @@ export default function ExamRoom() {
       </div>
     );
   }
-  
+
   if (!questions.length) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4 p-6">
           <p className="text-lg font-medium text-foreground">No questions available.</p>
           <p className="text-sm text-muted-foreground">
-            {!isOnline() 
+            {!isOnline()
               ? "You're offline and this exam hasn't been downloaded. Please go online to download it first."
               : "The exam may not have been generated properly."}
           </p>
@@ -468,7 +468,7 @@ export default function ExamRoom() {
       </div>
     );
   }
-  
+
   if (!currentQuestion) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -501,7 +501,7 @@ export default function ExamRoom() {
               <span>{Math.round(calculateProgress())}% Complete</span>
             </div>
           </div>
-          
+
           <Progress value={calculateProgress()} className="h-2 mb-4" />
 
           <div className="flex items-center justify-between">
@@ -583,20 +583,19 @@ export default function ExamRoom() {
         <Card className="border-2 border-border/60 shadow-sm">
           <CardContent className="p-6 md:p-10">
             <p className="text-xl md:text-2xl font-medium leading-relaxed text-foreground mb-8">{currentQuestion.text}</p>
-            <RadioGroup 
-              value={answers[currentQuestion.id.toString()] || answers[currentQuestion.id] || ""} 
-              onValueChange={handleSelectOption} 
+            <RadioGroup
+              value={answers[currentQuestion.id.toString()] || answers[currentQuestion.id] || ""}
+              onValueChange={handleSelectOption}
               className="space-y-4"
             >
               {currentQuestion.options && currentQuestion.options.length > 0 ? (
                 currentQuestion.options.map((option, index) => (
                   <div
                     key={option.id}
-                    className={`flex items-center space-x-2 border rounded-xl p-4 transition-all cursor-pointer hover:bg-muted/50 ${
-                      (answers[currentQuestion.id.toString()] || answers[currentQuestion.id]) === option.id 
-                        ? "border-primary bg-primary/5 ring-1 ring-primary" 
+                    className={`flex items-center space-x-2 border rounded-xl p-4 transition-all cursor-pointer hover:bg-muted/50 ${(answers[currentQuestion.id.toString()] || answers[currentQuestion.id]) === option.id
+                        ? "border-primary bg-primary/5 ring-1 ring-primary"
                         : "border-border"
-                    }`}
+                      }`}
                   >
                     <RadioGroupItem value={option.id} id={`option-${option.id}`} />
                     <Label htmlFor={`option-${option.id}`} className="flex-1 cursor-pointer font-normal text-lg ml-2">
@@ -626,13 +625,12 @@ export default function ExamRoom() {
                 <button
                   key={q.id || idx}
                   onClick={() => setCurrentQIndex(idx)}
-                  className={`h-2.5 w-2.5 rounded-full transition-all ${
-                    idx === currentQIndex 
-                      ? "bg-primary w-6" 
-                      : hasAnswer 
-                        ? "bg-primary/40" 
+                  className={`h-2.5 w-2.5 rounded-full transition-all ${idx === currentQIndex
+                      ? "bg-primary w-6"
+                      : hasAnswer
+                        ? "bg-primary/40"
                         : "bg-muted-foreground/20"
-                  }`}
+                    }`}
                 />
               );
             })}
@@ -651,7 +649,7 @@ export default function ExamRoom() {
 
       {/* Sidebar & Mobile Sheet remain unchanged */}
       {/* ... You can reuse your previous sidebar / Sheet code ... */}
-      
+
       {/* Upgrade Dialog */}
       <Dialog open={upgradeDialogOpen} onOpenChange={setUpgradeDialogOpen}>
         <DialogContent>
@@ -679,8 +677,8 @@ export default function ExamRoom() {
       <CalculatorComponent open={calculatorOpen} onOpenChange={setCalculatorOpen} />
 
       {/* Formulas Sheet */}
-      <FormulasSheet 
-        open={formulasOpen} 
+      <FormulasSheet
+        open={formulasOpen}
         onOpenChange={setFormulasOpen}
         examBody={examTitle}
         subject={currentQuestion?.subject}
@@ -730,6 +728,24 @@ export default function ExamRoom() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* End Exam Confirmation Dialog */}
+      <AlertDialog open={showEndExamDialog} onOpenChange={setShowEndExamDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>End Exam?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to end this exam? You have answered {Object.keys(answers).length} out of {questions.length} questions.
+              <br /><br />
+              This will submit your answers and you won't be able to change them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Working</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmEndExam}>Yes, End Exam</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }
