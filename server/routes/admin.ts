@@ -364,7 +364,8 @@ router.get("/diagnostic", async (req: Request, res: Response) => {
         !userEmail ? "User has no email. Email is required for admin access." : null,
         !isInWhitelist && userEmail ? `Email "${userEmail}" is not in ADMIN_EMAILS whitelist. Add it to .env file.` : null,
         user?.role !== "admin" && !isInWhitelist ? "User role is not 'admin' and email is not in whitelist." : null,
-        !process.env.ADMIN_EMAILS ? "ADMIN_EMAILS environment variable is not set." : null
+        !process.env.ADMIN_EMAILS ? "ADMIN_EMAILS environment variable is not set." : null,
+        !process.env.SUPABASE_SERVICE_ROLE_KEY ? "SUPABASE_SERVICE_ROLE_KEY is not set (required for auth)." : null
       ].filter(Boolean)
     });
   } catch (err: any) {
