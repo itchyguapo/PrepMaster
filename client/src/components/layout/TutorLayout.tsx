@@ -1,13 +1,18 @@
 import { Link, useLocation } from "wouter";
-import { 
-  LayoutDashboard, 
-  Users, 
-  FileText, 
-  Settings, 
-  LogOut, 
-  BookOpen,
+import {
+  Plus,
   BarChart,
-  GraduationCap
+  Calendar,
+  Users,
+  FileText,
+  ChevronRight,
+  Clock,
+  AlertCircle,
+  LogOut,
+  BookOpen,
+  GraduationCap,
+  Settings,
+  LayoutDashboard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -31,6 +36,7 @@ export function TutorLayout({ children }: TutorLayoutProps) {
   const { user, signOut } = useAuth();
   const [userData, setUserData] = useState<{
     username: string;
+    tutorPlan?: string;
   } | null>(null);
 
   // Fetch user data for display
@@ -47,6 +53,7 @@ export function TutorLayout({ children }: TutorLayoutProps) {
           const data = await res.json();
           setUserData({
             username: data.username || user.email?.split("@")[0] || "Tutor",
+            tutorPlan: data.tutorPlan,
           });
         }
       } catch (error) {
@@ -78,8 +85,9 @@ export function TutorLayout({ children }: TutorLayoutProps) {
 
   const sidebarLinks = [
     { href: "/tutor", icon: LayoutDashboard, label: "Dashboard" },
+    { href: "/tutor/exams", icon: FileText, label: "Custom Exams" },
     { href: "/tutor/groups", icon: Users, label: "Groups" },
-    { href: "/tutor/create-assignment", icon: FileText, label: "Create Test" },
+    { href: "/tutor/create-assignment", icon: Plus, label: "Create Test" },
     { href: "/tutor/reports", icon: BarChart, label: "Reports" },
     { href: "/tutor/settings", icon: Settings, label: "Settings" },
   ];
@@ -97,14 +105,13 @@ export function TutorLayout({ children }: TutorLayoutProps) {
           {sidebarLinks.map((link) => {
             const isActive = location === link.href || (link.href !== "/tutor" && location.startsWith(link.href));
             return (
-              <Link 
-                key={link.href} 
+              <Link
+                key={link.href}
                 href={link.href}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-md transition-colors ${
-                  isActive 
-                    ? "bg-primary/10 text-primary font-medium" 
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-md transition-colors ${isActive
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
               >
                 <link.icon className="h-4 w-4" />
                 {link.label}
@@ -135,7 +142,7 @@ export function TutorLayout({ children }: TutorLayoutProps) {
                 <button className="flex items-center gap-3 hover:opacity-80 transition-opacity">
                   <div className="text-right hidden sm:block">
                     <p className="text-sm font-semibold">{displayName}</p>
-                    <p className="text-xs text-muted-foreground">PrepMaster Tutor</p>
+                    <p className="text-xs text-primary font-medium">{userData?.tutorPlan || "PrepMaster Tutor"}</p>
                   </div>
                   <Avatar className="h-9 w-9 border-2 border-background ring-2 ring-border">
                     <AvatarImage src={user?.user_metadata?.avatar_url} />
@@ -150,8 +157,8 @@ export function TutorLayout({ children }: TutorLayoutProps) {
                     <p className="text-xs leading-none text-muted-foreground">
                       {user?.email}
                     </p>
-                    <p className="text-xs leading-none text-primary font-medium mt-1">
-                      PrepMaster Tutor
+                    <p className="text-xs leading-none text-primary font-bold mt-1 uppercase tracking-wider">
+                      {userData?.tutorPlan || "PrepMaster Tutor"}
                     </p>
                   </div>
                 </DropdownMenuLabel>
@@ -169,7 +176,7 @@ export function TutorLayout({ children }: TutorLayoutProps) {
             </DropdownMenu>
           </div>
         </header>
-        
+
         {/* Page Content */}
         <div className="flex-1 p-8">
           <div className="max-w-6xl mx-auto animate-in fade-in duration-500">

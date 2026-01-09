@@ -10,10 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import {
   ArrowRight, Target, TrendingUp, Clock, Award, BookOpen, PlayCircle,
-  Download, Wifi, WifiOff, Lock, Crown, CheckCircle2, XCircle,
+  Download, Wifi, WifiOff, Lock, Crown, CheckCircle2, XCircle, Users,
   TrendingDown, Minus, Zap, BarChart3, Filter, Search, Loader2, X, Sparkles
 } from "lucide-react";
+import JoinGroupModal from "@/components/student/JoinGroupModal";
 import { useLocation } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -114,6 +116,11 @@ export default function Dashboard() {
   const [resultsSearch, setResultsSearch] = useState<string>("");
   const [dismissedWelcome, setDismissedWelcome] = useState(false);
   const [pressedButtons, setPressedButtons] = useState<Set<string>>(new Set());
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [classroomData, setClassroomData] = useState<{
+    memberships: Array<{ groupId: string; groupName: string; tutorName: string; joinedAt: string }>;
+    assignments: Array<{ id: string; title: string; dueDate: string; groupName: string; status: string; examId: string }>;
+  }>({ memberships: [], assignments: [] });
   const [userStats, setUserStats] = useState<{
     currentStreak: number;
     longestStreak: number;
@@ -223,8 +230,23 @@ export default function Dashboard() {
       }
     };
 
+    const fetchClassroom = async () => {
+      if (!supabaseUser?.id) return;
+      try {
+        const res = await apiRequest("GET", `/api/student/my-classes?supabaseId=${supabaseUser.id}`);
+        if (res.ok) {
+          setClassroomData(await res.json());
+        }
+      } catch (err) {
+        console.error("Error fetching classroom:", err);
+      }
+    };
+
     if (supabaseUser && (subscriptionPlan === "standard" || subscriptionPlan === "premium")) {
       void fetchPerformance();
+    }
+    if (supabaseUser) {
+      void fetchClassroom();
     }
   }, [supabaseUser, online, subscriptionPlan]);
 
@@ -302,10 +324,12 @@ export default function Dashboard() {
   // Load attempts
   useEffect(() => {
     const fetchAttempts = async () => {
+      if (!supabaseUser) return;
+
       try {
         if (online) {
           try {
-            const res = await fetch("/api/attempts");
+            const res = await fetch(`/api/attempts?supabaseId=${supabaseUser.id}`);
             if (res.ok) {
               const data = await res.json();
               setAttempts(data || []);
@@ -324,7 +348,7 @@ export default function Dashboard() {
       }
     };
     void fetchAttempts();
-  }, [online]);
+  }, [online, supabaseUser]);
 
   // Load available exam bodies based on user's tier
   useEffect(() => {
@@ -944,6 +968,10 @@ export default function Dashboard() {
                 "Basic"
               )}
             </Badge>
+            <Button variant="outline" size="sm" onClick={() => setIsJoinModalOpen(true)} className="gap-2">
+              <Users className="h-4 w-4" />
+              Join Class
+            </Button>
             {(subscriptionStatus === "basic" || subscriptionStatus === "expired") && (
               <Button variant="outline" size="sm" onClick={() => setLocation("/pricing")}>
                 Upgrade
@@ -951,6 +979,11 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        <JoinGroupModal
+          isOpen={isJoinModalOpen}
+          onClose={() => setIsJoinModalOpen(false)}
+        />
 
         {/* Two Column Layout: Main Content + Sidebar */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1122,46 +1155,32 @@ export default function Dashboard() {
                   <CardTitle>Account Information</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
-                      <p className="text-sm text-muted-foreground">Username</p>
-                      <p className="font-medium">{userData.username}</p>
+                      <p className="text-sm text-muted-foreground uppercase tracking-tight font-medium">Username</p>
+                      <p className="font-semibold">{userData.username}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Email</p>
-                      <p className="font-medium">{userData.email || "Not set"}</p>
+                      <p className="text-sm text-muted-foreground uppercase tracking-tight font-medium">Email</p>
+                      <p className="font-semibold truncate">{userData.email || "Not set"}</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Subscription</p>
-                      <p className="font-medium capitalize">
-                        {userData.subscriptionPlan || subscriptionStatus}
+                    <div className="sm:col-span-2 lg:col-span-1">
+                      <p className="text-sm text-muted-foreground uppercase tracking-tight font-medium">Subscription</p>
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <Badge variant="secondary" className="capitalize">
+                          {userData.subscriptionPlan || subscriptionStatus}
+                        </Badge>
                         {userData.subscriptionExpiresAt && subscriptionStatus === "premium" && (
-                          <span className="text-xs text-muted-foreground block">
-                            Expires {new Date(userData.subscriptionExpiresAt).toLocaleDateString()}
+                          <span className="text-[10px] text-muted-foreground font-medium">
+                            Valid until {new Date(userData.subscriptionExpiresAt).toLocaleDateString()}
                           </span>
                         )}
-                      </p>
+                      </div>
                       {userData.subscriptionPlan === "basic" && userData.preferredExamBody && (
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1.5 font-medium">
                           Access: {userData.preferredExamBody} only
                         </p>
                       )}
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {userData.subscriptionPlan === "basic" ? (
-                          <span className="text-blue-600 dark:text-blue-400">✓ Exam access (1 per day)</span>
-                        ) : userData.canAccessExams ? (
-                          <span className="text-green-600 dark:text-green-400">✓ Exam access enabled (unlimited)</span>
-                        ) : (
-                          <span className="text-yellow-600 dark:text-yellow-400">✗ Exam access locked</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {userData.canDownloadOffline ? (
-                          <span className="text-green-600 dark:text-green-400">✓ Offline downloads enabled</span>
-                        ) : (
-                          <span className="text-yellow-600 dark:text-yellow-400">✗ Offline downloads locked</span>
-                        )}
-                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -1184,7 +1203,7 @@ export default function Dashboard() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {/* Exam Body Selection */}
                   <div className="space-y-2">
                     <Label htmlFor="exam-body" className="text-sm font-semibold flex items-center gap-2">
@@ -1199,12 +1218,12 @@ export default function Dashboard() {
                         setExams([]);
                       }}
                     >
-                      <SelectTrigger id="exam-body" className="h-11">
-                        <SelectValue placeholder="Select exam body" />
+                      <SelectTrigger id="exam-body" className="h-10 sm:h-11">
+                        <SelectValue placeholder="Select body" />
                       </SelectTrigger>
                       <SelectContent>
                         {examBodies.length === 0 ? (
-                          <div className="px-2 py-1.5 text-sm text-muted-foreground">Loading exam bodies...</div>
+                          <div className="px-2 py-1.5 text-sm text-muted-foreground">Loading...</div>
                         ) : (
                           examBodies.map((body) => (
                             <SelectItem key={body.id} value={body.name}>{body.name}</SelectItem>
@@ -1228,8 +1247,8 @@ export default function Dashboard() {
                           setExams([]);
                         }}
                       >
-                        <SelectTrigger id="subcategory" className="h-11">
-                          <SelectValue placeholder="Select subcategory" />
+                        <SelectTrigger id="subcategory" className="h-10 sm:h-11">
+                          <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                         <SelectContent>
                           {subcategories.map((sub) => (
@@ -1242,7 +1261,7 @@ export default function Dashboard() {
 
                   {/* Question Count Selection */}
                   {selectedBody && selectedSub && (
-                    <div className="space-y-2 animate-in fade-in slide-in-from-left-4 duration-300">
+                    <div className="space-y-2 animate-in fade-in slide-in-from-left-4 duration-300 sm:col-span-2 lg:col-span-1">
                       <Label htmlFor="question-count" className="text-sm font-semibold flex items-center gap-2">
                         <BarChart3 className="h-4 w-4 text-primary" />
                         Questions
@@ -1251,7 +1270,7 @@ export default function Dashboard() {
                         value={questionCount.toString()}
                         onValueChange={(value) => setQuestionCount(Number(value))}
                       >
-                        <SelectTrigger id="question-count" className="h-11">
+                        <SelectTrigger id="question-count" className="h-10 sm:h-11">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1342,18 +1361,114 @@ export default function Dashboard() {
 
             {/* Main Content Tabs */}
             <Tabs defaultValue="available" className="space-y-4">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="available">Available Exams</TabsTrigger>
+                <TabsTrigger value="classroom">
+                  My Classroom
+                  {classroomData.assignments.length > 0 && (
+                    <Badge variant="secondary" className="ml-2 h-4 px-1 text-[10px]">
+                      {classroomData.assignments.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="offline">Offline Exams</TabsTrigger>
                 <TabsTrigger value="results" id="results-tab">Results</TabsTrigger>
               </TabsList>
+
+              <TabsContent value="classroom" className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Active Assignments */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <Zap className="h-5 w-5 text-primary" />
+                      Active Assignments
+                    </h3>
+                    {classroomData.assignments.length > 0 ? (
+                      <div className="space-y-3">
+                        {classroomData.assignments.map((assignment) => (
+                          <Card key={assignment.id} className="border-l-4 border-l-primary">
+                            <CardHeader className="py-3">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <CardTitle className="text-base">{assignment.title}</CardTitle>
+                                  <CardDescription className="text-xs">
+                                    Class: {assignment.groupName}
+                                  </CardDescription>
+                                </div>
+                                <Badge variant="outline" className="text-[10px]">
+                                  {assignment.status.toUpperCase()}
+                                </Badge>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="py-3 pt-0">
+                              <div className="flex justify-between items-center text-xs text-muted-foreground mb-4">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  Due: {assignment.dueDate ? new Date(assignment.dueDate).toLocaleDateString() : "No date"}
+                                </span>
+                              </div>
+                              <Button
+                                size="sm"
+                                className="w-full"
+                                onClick={() => setLocation(`/exam/${assignment.examId}`)}
+                              >
+                                Take Assignment
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    ) : (
+                      <Card className="bg-muted/30 border-dashed">
+                        <CardContent className="py-8 text-center">
+                          <p className="text-sm text-muted-foreground">No pending assignments.</p>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+
+                  {/* Joined Groups */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <Users className="h-5 w-5 text-muted-foreground" />
+                      My Classes
+                    </h3>
+                    {classroomData.memberships.length > 0 ? (
+                      <div className="space-y-3">
+                        {classroomData.memberships.map((membership) => (
+                          <div key={membership.groupId} className="p-3 bg-card border rounded-lg flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-sm">{membership.groupName}</p>
+                              <p className="text-xs text-muted-foreground">Tutor: {membership.tutorName || "Unknown"}</p>
+                            </div>
+                            <Badge variant="secondary" className="text-[10px]">Active</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <Card className="bg-muted/30 border-dashed">
+                        <CardContent className="py-8 text-center space-y-3">
+                          <p className="text-sm text-muted-foreground">You haven't joined any classes yet.</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsJoinModalOpen(true)}
+                          >
+                            Join a Class
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
 
               <TabsContent value="available" className="space-y-4">
                 {/* Available Exams from Database */}
                 {exams.length > 0 && (
                   <div>
                     <h2 className="text-xl font-semibold mb-4">Available Exams</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
                       {examsWithStatus.map((exam) => {
                         const canDownloadExam = canDownload();
                         const isDownloaded = offlineExams.some(e => e.examId === exam.id);

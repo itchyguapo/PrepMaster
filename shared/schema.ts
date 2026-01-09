@@ -602,7 +602,7 @@ export const tutorGroups = pgTable("tutor_groups", {
   description: text("description"),
   subject: text("subject"),
   examBodyId: varchar("exam_body_id").references(() => examBodies.id, { onDelete: "set null" }),
-  trackId: varchar("track_id").references(() => academicTracks.id, { onDelete: "set null" }),
+  categoryId: varchar("category_id").references(() => categories.id, { onDelete: "set null" }),
   maxStudents: integer("max_students"),
   isActive: boolean("is_active").default(true),
   groupCode: varchar("group_code").unique(), // Unique code for students to join
@@ -615,19 +615,21 @@ export type InsertTutorGroup = z.infer<typeof insertTutorGroupSchema>;
 export type TutorGroup = typeof tutorGroups.$inferSelect;
 
 // Group Members - Student-tutor group relationships
-export const groupMembers = pgTable("group_members", {
+export const group_members = pgTable("group_members", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   groupId: varchar("group_id").notNull().references(() => tutorGroups.id, { onDelete: "cascade" }),
-  studentId: varchar("student_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  studentId: varchar("student_id").references(() => users.id, { onDelete: "cascade" }), // Nullable for guest members
+  guestName: text("guest_name"),
+  guestEmail: text("guest_email"),
   joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow(),
   status: text("status", { enum: ["active", "removed"] }).default("active"),
   role: text("role", { enum: ["student", "assistant"] }).default("student"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
-export const insertGroupMemberSchema = createInsertSchema(groupMembers);
+export const insertGroupMemberSchema = createInsertSchema(group_members);
 export type InsertGroupMember = z.infer<typeof insertGroupMemberSchema>;
-export type GroupMember = typeof groupMembers.$inferSelect;
+export type GroupMember = typeof group_members.$inferSelect;
 
 // Tutor Assignments - Tests assigned by tutors to groups/students
 export const tutorAssignments = pgTable("tutor_assignments", {
@@ -657,7 +659,9 @@ export type TutorAssignment = typeof tutorAssignments.$inferSelect;
 export const assignmentAttempts = pgTable("assignment_attempts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   assignmentId: varchar("assignment_id").notNull().references(() => tutorAssignments.id, { onDelete: "cascade" }),
-  studentId: varchar("student_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  studentId: varchar("student_id").references(() => users.id, { onDelete: "cascade" }), // Nullable for guests
+  guestName: text("guest_name"),
+  guestEmail: text("guest_email"),
   attemptId: varchar("attempt_id").references(() => attempts.id, { onDelete: "set null" }),
   startedAt: timestamp("started_at", { withTimezone: true }).defaultNow(),
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
@@ -759,3 +763,110 @@ export const downloads = pgTable("downloads", {
 export const insertDownloadSchema = createInsertSchema(downloads);
 export type InsertDownload = z.infer<typeof insertDownloadSchema>;
 export type Download = typeof downloads.$inferSelect;
+
+// Activity Logs - Track system activity and admin actions
+export const activityLogs = pgTable("activity_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").notNull(), // 'user', 'subscription', 'exam_content', 'system', 'payment'
+  action: text("action").notNull(), // 'Banned User', 'Deleted Category', etc.
+  user: text("user").notNull(), // Contextual identifier (e.g., student email or object name)
+  details: text("details"),
+  actorId: varchar("actor_id").references(() => users.id, { onDelete: "set null" }), // Admin who performed the action
+  timestamp: timestamp("timestamp", { withTimezone: true }).defaultNow(),
+});
+
+export const insertActivityLogSchema = createInsertSchema(activityLogs);
+export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
+export type ActivityLog = typeof activityLogs.$inferSelect;
+
+// --- TUTOR EXAM SYSTEM V1 ---
+
+export const tutorStatusEnum = ["pending", "approved", "suspended"] as const;
+export const examStatusEnum = ["draft", "active", "expired", "closed"] as const;
+
+// Tutor Profiles
+export const tutorProfiles = pgTable("tutor_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  approvedByAdminId: varchar("approved_by_admin_id").references(() => users.id, { onDelete: "set null" }),
+  studentQuota: integer("student_quota").notNull().default(0),
+  status: text("status", { enum: tutorStatusEnum }).notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export const insertTutorProfileSchema = createInsertSchema(tutorProfiles);
+export type InsertTutorProfile = z.infer<typeof insertTutorProfileSchema>;
+export type TutorProfile = typeof tutorProfiles.$inferSelect;
+
+// Tutor Exams
+export const tutorExams = pgTable("tutor_exams", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tutorId: varchar("tutor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  examBodyId: varchar("exam_body_id").notNull().references(() => examBodies.id),
+  categoryId: varchar("category_id").notNull().references(() => categories.id),
+  title: text("title").notNull(),
+  totalQuestions: integer("total_questions").notNull(),
+  timeLimitMinutes: integer("time_limit_minutes").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  status: text("status", { enum: examStatusEnum }).notNull().default("draft"),
+  maxCandidates: integer("max_candidates").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export const insertTutorExamSchema = createInsertSchema(tutorExams);
+export type InsertTutorExam = z.infer<typeof insertTutorExamSchema>;
+export type TutorExam = typeof tutorExams.$inferSelect;
+
+// Tutor Exam Subjects (Weightage)
+export const tutorExamSubjects = pgTable("tutor_exam_subjects", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tutorExamId: varchar("tutor_exam_id").notNull().references(() => tutorExams.id, { onDelete: "cascade" }),
+  subjectId: varchar("subject_id").notNull().references(() => subjects.id),
+  questionCount: integer("question_count").notNull(),
+});
+
+export const insertTutorExamSubjectSchema = createInsertSchema(tutorExamSubjects);
+export type InsertTutorExamSubject = z.infer<typeof insertTutorExamSubjectSchema>;
+export type TutorExamSubject = typeof tutorExamSubjects.$inferSelect;
+
+// Tutor Exam Questions (Locked questions)
+export const tutorExamQuestions = pgTable("tutor_exam_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tutorExamId: varchar("tutor_exam_id").notNull().references(() => tutorExams.id, { onDelete: "cascade" }),
+  questionId: varchar("question_id").notNull().references(() => questions.id),
+  subjectId: varchar("subject_id").notNull().references(() => subjects.id),
+});
+
+export const insertTutorExamQuestionSchema = createInsertSchema(tutorExamQuestions);
+export type InsertTutorExamQuestion = z.infer<typeof insertTutorExamQuestionSchema>;
+export type TutorExamQuestion = typeof tutorExamQuestions.$inferSelect;
+
+// Tutor Exam Sessions (Attempts)
+export const tutorExamSessions = pgTable("tutor_exam_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tutorExamId: varchar("tutor_exam_id").notNull().references(() => tutorExams.id, { onDelete: "cascade" }),
+  candidateName: text("candidate_name").notNull(),
+  candidateClass: text("candidate_class").notNull(),
+  candidateSchool: text("candidate_school").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow(),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  score: integer("score"),
+  status: text("status", { enum: ["in_progress", "submitted"] }).notNull().default("in_progress"),
+});
+
+export const insertTutorExamSessionSchema = createInsertSchema(tutorExamSessions);
+export type InsertTutorExamSession = z.infer<typeof insertTutorExamSessionSchema>;
+export type TutorExamSession = typeof tutorExamSessions.$inferSelect;
+
+// Tutor Exam Answers (Grading persistence)
+export const tutorExamAnswers = pgTable("tutor_exam_answers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tutorExamSessionId: varchar("tutor_exam_session_id").notNull().references(() => tutorExamSessions.id, { onDelete: "cascade" }),
+  questionId: varchar("question_id").notNull().references(() => questions.id),
+  selectedOptionId: varchar("selected_option_id").references(() => questionOptions.id),
+  isCorrect: boolean("is_correct").notNull(),
+});
+
+export const insertTutorExamAnswerSchema = createInsertSchema(tutorExamAnswers);
+export type InsertTutorExamAnswer = z.infer<typeof insertTutorExamAnswerSchema>;
+export type TutorExamAnswer = typeof tutorExamAnswers.$inferSelect;

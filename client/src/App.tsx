@@ -26,6 +26,12 @@ import TutorDashboard from "@/pages/tutor/TutorDashboard";
 import TutorGroups from "@/pages/tutor/Groups";
 import CreateAssignment from "@/pages/tutor/CreateAssignment";
 import TutorReports from "@/pages/tutor/Reports";
+import TutorExams from "@/pages/tutor/TutorExams";
+import CreateTutorExam from "@/pages/tutor/CreateTutorExam";
+import TutorExamStats from "@/pages/tutor/TutorExamStats";
+import TutorSettings from "@/pages/tutor/TutorSettings";
+import PublicExamEntry from "@/pages/student/PublicExamEntry";
+import TutorExamRoom from "@/pages/student/TutorExamRoom";
 import TutorLogin from "@/pages/tutor/TutorLogin";
 import { TutorRouteGuard } from "@/components/tutor/TutorRouteGuard";
 import { StudentRouteGuard } from "@/components/student/StudentRouteGuard";
@@ -72,13 +78,7 @@ function Router() {
           </StudentRouteGuard>
         )}
       </Route>
-      <Route path="/settings">
-        {() => (
-          <StudentRouteGuard>
-            <Settings />
-          </StudentRouteGuard>
-        )}
-      </Route>
+      <Route path="/settings" component={Settings} />
       <Route path="/features" component={Features} />
       <Route path="/resources" component={Resources} />
       <Route path="/resources/:slug" component={ResourceViewer} />
@@ -86,7 +86,7 @@ function Router() {
       <Route path="/exam/simulation" component={ExamSimulation} />
       <Route path="/results" component={Results} />
       <Route path="/pricing" component={Pricing} />
-      
+
       {/* Admin Routes - Protected by AdminRouteGuard */}
       <Route path="/admin">
         {() => (
@@ -145,37 +145,68 @@ function Router() {
           </AdminRouteGuard>
         )}
       </Route>
-      
-                  {/* Tutor Routes - Protected by TutorRouteGuard */}
-                  <Route path="/tutor">
-                    {() => (
-                      <TutorRouteGuard>
-                        <TutorDashboard />
-                      </TutorRouteGuard>
-                    )}
-                  </Route>
-                  <Route path="/tutor/groups">
-                    {() => (
-                      <TutorRouteGuard>
-                        <TutorGroups />
-                      </TutorRouteGuard>
-                    )}
-                  </Route>
-                  <Route path="/tutor/create-assignment">
-                    {() => (
-                      <TutorRouteGuard>
-                        <CreateAssignment />
-                      </TutorRouteGuard>
-                    )}
-                  </Route>
-                  <Route path="/tutor/reports">
-                    {() => (
-                      <TutorRouteGuard>
-                        <TutorReports />
-                      </TutorRouteGuard>
-                    )}
-                  </Route>
-      
+
+      {/* Tutor Routes - Protected by TutorRouteGuard */}
+      <Route path="/tutor">
+        {() => (
+          <TutorRouteGuard>
+            <TutorDashboard />
+          </TutorRouteGuard>
+        )}
+      </Route>
+      <Route path="/tutor/groups">
+        {() => (
+          <TutorRouteGuard>
+            <TutorGroups />
+          </TutorRouteGuard>
+        )}
+      </Route>
+      <Route path="/tutor/create-assignment">
+        {() => (
+          <TutorRouteGuard>
+            <CreateAssignment />
+          </TutorRouteGuard>
+        )}
+      </Route>
+      <Route path="/tutor/exams">
+        {() => (
+          <TutorRouteGuard>
+            <TutorExams />
+          </TutorRouteGuard>
+        )}
+      </Route>
+      <Route path="/tutor/exams/create">
+        {() => (
+          <TutorRouteGuard>
+            <CreateTutorExam />
+          </TutorRouteGuard>
+        )}
+      </Route>
+      <Route path="/tutor/exams/:id/stats">
+        {() => (
+          <TutorRouteGuard>
+            <TutorExamStats />
+          </TutorRouteGuard>
+        )}
+      </Route>
+
+      <Route path="/public-exam/:id" component={PublicExamEntry} />
+      <Route path="/public-exam/:id/room" component={TutorExamRoom} />
+      <Route path="/tutor/reports">
+        {() => (
+          <TutorRouteGuard>
+            <TutorReports />
+          </TutorRouteGuard>
+        )}
+      </Route>
+      <Route path="/tutor/settings">
+        {() => (
+          <TutorRouteGuard>
+            <TutorSettings />
+          </TutorRouteGuard>
+        )}
+      </Route>
+
       <Route component={NotFound} />
     </Switch>
   );

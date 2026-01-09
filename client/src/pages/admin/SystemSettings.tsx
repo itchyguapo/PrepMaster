@@ -5,35 +5,58 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { 
-  Plus, 
-  Trash2, 
-  Edit2, 
-  Save, 
+import {
+  Plus,
+  Trash2,
+  Edit2,
+  Save,
   RotateCcw,
   BookOpen,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  ChevronRight,
+  ChevronDown,
+  Database,
+  Layers,
+  FileText
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { adminFetch } from "@/lib/adminApi";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLocation } from "wouter";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
 
-type Subject = {
+type SubjectStat = {
   id: string;
   name: string;
-  categoryId: string;
-  examBodyId: string;
-  examBodyName?: string;
-  categoryName?: string;
+  questionCount: number;
+};
+
+type CategoryStat = {
+  id: string;
+  name: string;
+  questionCount: number;
+  subjects: SubjectStat[];
+};
+
+type ExamBodyStat = {
+  id: string;
+  name: string;
+  questionCount: number;
+  categories: CategoryStat[];
 };
 
 export default function SystemSettings() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [stats, setStats] = useState<ExamBodyStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [pricing, setPricing] = useState({
     basic: 1500,
@@ -41,48 +64,30 @@ export default function SystemSettings() {
     premium: 4000,
   });
 
-  useEffect(() => {
-    const fetchSubjects = async () => {
-      setLoading(true);
-      try {
-        // Fetch all subjects from database
-        const res = await adminFetch("/api/admin/subjects");
-        if (res.ok) {
-          const data = await res.json();
-          // Group by exam body and category for display
-          const subjectsWithInfo = await Promise.all(
-            data.map(async (subject: Subject) => {
-              // Get exam body name
-              const bodyRes = await adminFetch(`/api/admin/exam-bodies`);
-              const bodies = bodyRes.ok ? await bodyRes.json() : [];
-              const examBody = bodies.find((b: any) => b.id === subject.examBodyId);
-              
-              // Get category name
-              const catRes = await adminFetch(`/api/admin/tracks?examBodyId=${subject.examBodyId}`);
-              const categories = catRes.ok ? await catRes.json() : [];
-              const category = categories.find((c: any) => c.id === subject.categoryId);
-              
-              return {
-                ...subject,
-                examBodyName: examBody?.name || "Unknown",
-                categoryName: category?.name || "Unknown",
-              };
-            })
-          );
-          setSubjects(subjectsWithInfo);
-        }
-      } catch (err) {
-        console.error("Error fetching subjects:", err);
-        toast({
-          title: "Error",
-          description: "Failed to load subjects.",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
+  const fetchStats = async () => {
+    setLoading(true);
+    try {
+      const res = await adminFetch("/api/admin/question-bank-stats");
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      } else {
+        throw new Error("Failed to fetch stats");
       }
-    };
-    void fetchSubjects();
+    } catch (err) {
+      console.error("Error fetching question bank stats:", err);
+      toast({
+        title: "Error",
+        description: "Failed to load question bank statistics.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchStats();
   }, [toast]);
 
   const handleSave = () => {
@@ -100,68 +105,95 @@ export default function SystemSettings() {
           <p className="text-muted-foreground">Configure global platform settings, subjects, and pricing.</p>
         </div>
 
-        <Tabs defaultValue="subjects" className="space-y-4">
+        <Tabs defaultValue="stats" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="subjects">Subjects & Topics</TabsTrigger>
+            <TabsTrigger value="stats">Question bank stats</TabsTrigger>
             <TabsTrigger value="pricing">Pricing & Plans</TabsTrigger>
             <TabsTrigger value="general">General Config</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="subjects">
+          <TabsContent value="stats">
             <Card>
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <div>
-                    <CardTitle>Subject Management</CardTitle>
-                    <CardDescription>View all subjects in the system. To add/edit subjects, use the Question Bank.</CardDescription>
+                    <CardTitle>Question Bank Statistics</CardTitle>
+                    <CardDescription>Hierarchical view of questions across exam bodies, categories, and subjects.</CardDescription>
                   </div>
                   <Button size="sm" onClick={() => setLocation("/admin/questions")}>
-                    <ExternalLink className="mr-2 h-4 w-4" /> Manage in Question Bank
+                    <ExternalLink className="mr-2 h-4 w-4" /> Manage Question Bank
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
                 {loading ? (
-                  <div className="text-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2" />
-                    <p className="text-muted-foreground">Loading subjects...</p>
+                  <div className="text-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+                    <p className="text-muted-foreground">Loading statistics...</p>
                   </div>
-                ) : subjects.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No subjects found. Add subjects in the Question Bank.
+                ) : stats.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Database className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                    <p>No statistics available. Please ensure subjects and questions are properly configured.</p>
                   </div>
                 ) : (
-                  <>
-                    <Alert className="mb-4">
-                      <AlertDescription>
-                        Subjects are managed in the Question Bank. Click "Manage in Question Bank" to add, edit, or delete subjects.
-                      </AlertDescription>
-                    </Alert>
-                    <div className="rounded-md border divide-y">
-                      {subjects.map((subject) => (
-                        <div key={subject.id} className="flex items-center justify-between p-4">
-                          <div className="flex items-center gap-4">
-                            <div className="bg-primary/10 p-2 rounded">
-                              <BookOpen className="h-4 w-4 text-primary" />
+                  <Accordion type="multiple" className="w-full space-y-4">
+                    {stats.map((body) => (
+                      <AccordionItem
+                        key={body.id}
+                        value={body.id}
+                        className="border rounded-lg px-2 bg-card overflow-hidden shadow-sm"
+                      >
+                        <AccordionTrigger className="hover:no-underline py-4 px-4 hover:bg-muted/30 transition-colors">
+                          <div className="flex items-center gap-3 text-left">
+                            <div className="p-2 bg-primary/10 rounded-md">
+                              <Database className="h-5 w-5 text-primary" />
                             </div>
                             <div>
-                              <p className="font-medium">{subject.name}</p>
+                              <p className="font-bold text-lg">{body.name}</p>
                               <p className="text-xs text-muted-foreground">
-                                {subject.examBodyName} • {subject.categoryName}
+                                {body.categories.length} Categories • {body.questionCount.toLocaleString()} total questions
                               </p>
                             </div>
                           </div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => setLocation("/admin/questions")}
-                          >
-                            <Edit2 className="mr-2 h-4 w-4" /> Edit
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-0 pb-4 px-4">
+                          <div className="space-y-3 mt-2">
+                            {body.categories.map((cat) => (
+                              <div key={cat.id} className="border rounded-md bg-muted/20 overflow-hidden">
+                                <div className="flex items-center justify-between p-3 border-b bg-muted/30">
+                                  <div className="flex items-center gap-2">
+                                    <Layers className="h-4 w-4 text-muted-foreground" />
+                                    <span className="font-semibold text-sm">{cat.name}</span>
+                                  </div>
+                                  <Badge variant="secondary" className="font-medium">
+                                    {cat.questionCount} Questions
+                                  </Badge>
+                                </div>
+                                <div className="p-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                  {cat.subjects.map((sub) => (
+                                    <div
+                                      key={sub.id}
+                                      className="flex items-center justify-between p-2 rounded border bg-card hover:border-primary/50 transition-colors group cursor-pointer"
+                                      onClick={() => setLocation(`/admin/questions?subjectId=${sub.id}`)}
+                                    >
+                                      <div className="flex items-center gap-2 overflow-hidden">
+                                        <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                        <span className="text-xs font-medium truncate">{sub.name}</span>
+                                      </div>
+                                      <span className="text-[10px] font-bold bg-muted px-1.5 py-0.5 rounded shrink-0">
+                                        {sub.questionCount}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
                 )}
               </CardContent>
             </Card>
@@ -228,12 +260,12 @@ export default function SystemSettings() {
                 </div>
               </CardContent>
               <div className="p-6 pt-0 flex gap-4">
-                 <Button onClick={handleSave}>
-                   <Save className="mr-2 h-4 w-4" /> Save Changes
-                 </Button>
-                 <Button variant="ghost">
-                   <RotateCcw className="mr-2 h-4 w-4" /> Reset Defaults
-                 </Button>
+                <Button onClick={handleSave}>
+                  <Save className="mr-2 h-4 w-4" /> Save Changes
+                </Button>
+                <Button variant="ghost">
+                  <RotateCcw className="mr-2 h-4 w-4" /> Reset Defaults
+                </Button>
               </div>
             </Card>
           </TabsContent>

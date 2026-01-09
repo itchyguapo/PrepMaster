@@ -1,10 +1,168 @@
 import { Router, type Request, type Response } from "express";
 import { db } from "../db";
-import { eq, and, sql, desc, gte } from "drizzle-orm";
-import { users, questions, attempts, subscriptions, examBodies, categories } from "@shared/schema";
+import { eq, and, sql, desc, gte, inArray } from "drizzle-orm";
+import { users, questions, attempts, subscriptions, examBodies, categories, tutorGroups, group_members, tutorAssignments } from "@shared/schema";
+import { count } from "drizzle-orm";
 import { safeInsertExam } from "../utils/breakProofExams";
 
 const router = Router();
+
+// Join a group via code
+router.post("/join-group", async (req: Request, res: Response) => {
+  try {
+    const { groupCode, supabaseId, guestName, guestEmail } = req.body;
+
+    if (!groupCode) {
+      return res.status(400).json({ message: "Group code is required" });
+    }
+
+    // Find the group
+    const group = await db
+      .select()
+      .from(tutorGroups)
+      .where(and(eq(tutorGroups.groupCode, groupCode.toUpperCase()), eq(tutorGroups.isActive, true)))
+      .limit(1);
+
+    if (group.length === 0) {
+      return res.status(404).json({ message: "Group not found or inactive" });
+    }
+
+    const groupId = group[0].id;
+    let studentId: string | null = null;
+    let finalGuestName: string | null = guestName || null;
+    let finalGuestEmail: string | null = guestEmail || null;
+
+    // Logic for authenticated users
+    if (supabaseId) {
+      const userRecords = await db
+        .select()
+        .from(users)
+        .where(eq(users.supabaseId, supabaseId))
+        .limit(1);
+
+      if (userRecords.length > 0) {
+        studentId = userRecords[0].id;
+      }
+    }
+
+    // Check for duplicates
+    let duplicateCheck: any[] = [];
+    if (studentId) {
+      duplicateCheck = await db
+        .select()
+        .from(group_members)
+        .where(and(eq(group_members.groupId, groupId), eq(group_members.studentId, studentId)))
+        .limit(1);
+    } else if (finalGuestEmail) {
+      duplicateCheck = await db
+        .select()
+        .from(group_members)
+        .where(and(eq(group_members.groupId, groupId), eq(group_members.guestEmail, finalGuestEmail)))
+        .limit(1);
+    } else {
+      return res.status(400).json({ message: "Student information (authenticated or guest) is required" });
+    }
+
+    if (duplicateCheck.length > 0) {
+      if (duplicateCheck[0].status === "active") {
+        return res.status(400).json({ message: "You are already a member of this group" });
+      }
+      // Reactivate
+      const [updated] = await db
+        .update(group_members)
+        .set({ status: "active", joinedAt: new Date() })
+        .where(eq(group_members.id, duplicateCheck[0].id))
+        .returning();
+      return res.json({ message: "Joined group successfully", member: updated, groupName: group[0].name });
+    }
+
+    // Capacity check
+    const currentMembers = await db
+      .select({ count: count() })
+      .from(group_members)
+      .where(and(eq(group_members.groupId, groupId), eq(group_members.status, "active")));
+
+    if (group[0].maxStudents && currentMembers[0].count >= group[0].maxStudents) {
+      return res.status(403).json({ message: "Group is full" });
+    }
+
+    // Create member
+    const [newMember] = await db
+      .insert(group_members)
+      .values({
+        groupId,
+        studentId,
+        guestName: finalGuestName,
+        guestEmail: finalGuestEmail,
+        status: "active",
+        role: "student",
+      })
+      .returning();
+
+    return res.json({ message: "Joined group successfully", member: newMember, groupName: group[0].name });
+  } catch (err: any) {
+    console.error("Error joining group:", err);
+    return res.status(500).json({ message: "Failed to join group", error: err.message || String(err) });
+  }
+});
+
+// Get student's groups and assignments
+router.get("/my-classes", async (req: Request, res: Response) => {
+  try {
+    const { supabaseId, guestEmail } = req.query;
+
+    let studentId: string | null = null;
+    if (supabaseId) {
+      const userRecords = await db.select().from(users).where(eq(users.supabaseId, supabaseId as string)).limit(1);
+      if (userRecords.length > 0) studentId = userRecords[0].id;
+    }
+
+    if (!studentId && !guestEmail) {
+      return res.status(400).json({ message: "supabaseId or guestEmail is required" });
+    }
+
+    // Get group memberships
+    const memberships = await db
+      .select({
+        groupId: group_members.groupId,
+        groupName: tutorGroups.name,
+        tutorName: users.username,
+        joinedAt: group_members.joinedAt,
+      })
+      .from(group_members)
+      .innerJoin(tutorGroups, eq(group_members.groupId, tutorGroups.id))
+      .leftJoin(users, eq(tutorGroups.tutorId, users.id))
+      .where(
+        and(
+          studentId ? eq(group_members.studentId, studentId) : eq(group_members.guestEmail, guestEmail as string),
+          eq(group_members.status, "active")
+        )
+      );
+
+    const groupIds = memberships.map(m => m.groupId);
+
+    // Get assignments for these groups
+    const assignments = groupIds.length > 0
+      ? await db
+        .select({
+          id: tutorAssignments.id,
+          title: tutorAssignments.title,
+          dueDate: tutorAssignments.dueDate,
+          groupName: tutorGroups.name,
+          status: tutorAssignments.status,
+          examId: tutorAssignments.examId,
+        })
+        .from(tutorAssignments)
+        .innerJoin(tutorGroups, eq(tutorAssignments.groupId, tutorGroups.id))
+        .where(and(inArray(tutorAssignments.groupId, groupIds), inArray(tutorAssignments.status, ["scheduled", "active", "completed"])))
+      : [];
+
+    return res.json({ memberships, assignments });
+  } catch (err: any) {
+    console.error("Error fetching student classes:", err);
+    return res.status(500).json({ message: "Failed to fetch classes", error: err.message || String(err) });
+  }
+});
 
 // Generate exam with structured logic
 // Accepts either IDs or names for exam_body and category

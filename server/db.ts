@@ -31,7 +31,7 @@ pool.on('error', (err) => {
 let connectionTested = false;
 async function testConnection() {
   if (connectionTested) return;
-  
+
   try {
     const client = await pool.connect();
     await client.query('SELECT 1');
@@ -39,9 +39,13 @@ async function testConnection() {
     console.log('✅ Database connection verified');
     connectionTested = true;
   } catch (error: any) {
-    console.error('❌ Database connection test failed:', error.message);
-    console.error('   This may cause issues. Please check your DATABASE_URL.');
-    // Don't throw - allow app to start but log the error
+    if (error.code === 'ENOTFOUND') {
+      console.error(`❌ Database hostname could not be resolved: ${error.hostname}`);
+      console.error('   Please check if your DATABASE_URL is correct and you have an internet connection.');
+    } else {
+      console.error('❌ Database connection test failed:', error.message);
+      console.error('   This may cause issues. Please check your DATABASE_URL.');
+    }
   }
 }
 

@@ -52,7 +52,9 @@ type TutorGroup = {
 
 type GroupMember = {
   id: string;
-  studentId: string;
+  studentId: string | null;
+  guestName: string | null;
+  guestEmail: string | null;
   joinedAt: string;
   status: string;
   role: string;
@@ -334,13 +336,13 @@ export default function Groups() {
     }
   };
 
-  const handleRemoveMember = async (groupId: string, studentId: string) => {
+  const handleRemoveMember = async (groupId: string, memberId: string) => {
     if (!confirm("Remove this student from the group?")) {
       return;
     }
 
     try {
-      const res = await tutorFetch(`/api/tutor/groups/${groupId}/members/${studentId}`, {
+      const res = await tutorFetch(`/api/tutor/groups/${groupId}/members/${memberId}`, {
         method: "DELETE",
       });
 
@@ -626,8 +628,20 @@ export default function Groups() {
                           <TableBody>
                             {members[group.id].map((member) => (
                               <TableRow key={member.id}>
-                                <TableCell>{member.username || "N/A"}</TableCell>
-                                <TableCell>{member.email || "N/A"}</TableCell>
+                                <TableCell>
+                                  {member.studentId ? (
+                                    <div className="flex flex-col">
+                                      <span>{member.username || "Registered User"}</span>
+                                      <span className="text-[10px] text-muted-foreground">ID: {member.studentId.substring(0, 8)}...</span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">{member.guestName}</span>
+                                      <Badge variant="outline" className="text-[10px] h-4 bg-muted text-muted-foreground border-dashed">GUEST</Badge>
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell>{member.studentId ? member.email : member.guestEmail}</TableCell>
                                 <TableCell>
                                   {new Date(member.joinedAt).toLocaleDateString()}
                                 </TableCell>
@@ -635,7 +649,7 @@ export default function Groups() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleRemoveMember(group.id, member.studentId)}
+                                    onClick={() => handleRemoveMember(group.id, member.id)}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>

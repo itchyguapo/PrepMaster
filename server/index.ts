@@ -140,13 +140,12 @@ app.use((req, res, next) => {
 app.use("/api", apiLimiter);
 
 (async () => {
-  // Validate database schema on startup (temporarily disabled)
+  // Validate database schema on startup
   try {
-    // const { validateSchemaOnStartup } = await import("./utils/schemaValidation");
-    // await validateSchemaOnStartup();
-    console.log("⚠️  Schema validation temporarily disabled");
+    const { validateSchemaOnStartup } = await import("./utils/schemaValidation");
+    await validateSchemaOnStartup();
   } catch (error) {
-    console.warn("⚠️  Schema validation disabled:", (error as any).message);
+    console.warn("⚠️  Schema validation issues found:", (error as any).message);
     console.error("Please run the migration: psql -d your_database -f migrations/001_comprehensive_schema_migration.sql");
     // Don't exit - allow server to start for testing
   }

@@ -226,9 +226,9 @@ export default function Pricing() {
       <Navbar />
 
       <div className="pt-24 pb-20 container mx-auto px-4">
-        <div className="text-center max-w-3xl mx-auto mb-12 space-y-4">
-          <h1 className="text-4xl md:text-5xl font-display font-bold">Simple, Transparent Pricing</h1>
-          <p className="text-xl text-muted-foreground">Invest in your future for less than the cost of a textbook.</p>
+        <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-12 space-y-3 sm:space-y-4 px-4">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-bold leading-tight">Simple, Transparent Pricing</h1>
+          <p className="text-base sm:text-xl text-muted-foreground">Invest in your trial for less than the cost of a textbook.</p>
         </div>
 
         {/* Billing Period Toggle */}
@@ -283,7 +283,7 @@ export default function Pricing() {
               const savings = billingPeriod === "annual" ? Math.round(tier.monthlyPrice * 12 - tier.annualPrice) : 0;
 
               return (
-                <Card key={i} className={`relative flex flex-col ${tier.popular ? 'border-primary shadow-xl scale-105 z-10' : 'border-border'} ${isCurrent ? 'ring-2 ring-primary' : ''}`}>
+                <Card key={i} className={`relative flex flex-col w-full max-w-[350px] sm:max-w-none ${tier.popular ? 'border-primary shadow-xl sm:scale-105 z-10' : 'border-border'} ${isCurrent ? 'ring-2 ring-primary' : ''}`}>
                   {tier.popular && (
                     <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                       <Badge className="bg-primary text-primary-foreground px-4 py-1">Most Popular</Badge>

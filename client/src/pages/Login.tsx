@@ -356,13 +356,21 @@ export default function Login() {
             </div>
             <div className="text-center text-xs">
               <p className="text-muted-foreground">
-                Are you a tutor or school?{" "}
+                Administrative access?{" "}
+                <Button
+                  variant="link"
+                  className="p-0 h-auto text-xs"
+                  onClick={() => setLocation("/admin")}
+                >
+                  Admin Portal
+                </Button>
+                {" • "}
                 <Button
                   variant="link"
                   className="p-0 h-auto text-xs"
                   onClick={() => setLocation("/tutor/login")}
                 >
-                  Sign in to Tutor Portal
+                  Tutor Portal
                 </Button>
               </p>
             </div>

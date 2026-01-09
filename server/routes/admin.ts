@@ -22,12 +22,15 @@ import {
   examRules,
   payments,
   tutorInquiries,
-  subtopics
+  subtopics,
+  activityLogs,
+  tutorProfiles
 } from "@shared/schema";
 import { eq, and, inArray, sql, count, gte, desc, or, ilike } from "drizzle-orm";
 import { requireAdmin } from "../middleware/adminAuth";
 import { formatQuestionOptions } from "../utils/questionFormatter";
 import { adminLimiter } from "../middleware/rateLimiter";
+import { logActivity } from "../utils/logger";
 
 const router = Router();
 
@@ -87,6 +90,14 @@ router.post("/subscriptions", async (req: Request, res: Response) => {
         .returning();
       subscription = newSubscription;
     }
+
+    // Log the activity
+    await logActivity({
+      type: 'subscription',
+      action: existingSubscriptions.length > 0 ? 'Updated Subscription' : 'Created Subscription',
+      user: userId,
+      details: `Plan: ${plan}, Status: ${status}`,
+    });
 
     return res.json({
       message: "Subscription updated successfully",
@@ -490,6 +501,14 @@ router.post("/exam-types", async (req: Request, res: Response) => {
       }
     }).returning();
 
+    // Log the activity
+    await logActivity({
+      type: 'exam_content',
+      action: 'Created Exam Type',
+      user: name,
+      details: `Code: ${code}, Body ID: ${examBodyId}`,
+    });
+
     return res.json(newExamType);
   } catch (err) {
     return res.status(500).json({ message: "Failed to create exam type", error: String(err) });
@@ -517,6 +536,14 @@ router.put("/exam-types/:id", async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Exam type not found" });
     }
 
+    // Log the activity
+    await logActivity({
+      type: 'exam_content',
+      action: 'Updated Exam Type',
+      user: name || updated.name,
+      details: `ID: ${id}`,
+    });
+
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ message: "Failed to update exam type", error: String(err) });
@@ -539,6 +566,15 @@ router.delete("/exam-types/:id", async (req: Request, res: Response) => {
     }
 
     await db.delete(examTypes).where(eq(examTypes.id, id));
+
+    // Log the activity
+    await logActivity({
+      type: 'exam_content',
+      action: 'Deleted Exam Type',
+      user: `ID: ${id}`,
+      details: 'Exam type and associated data removed',
+    });
+
     return res.json({ message: "Exam type deleted successfully" });
   } catch (err) {
     return res.status(500).json({ message: "Failed to delete exam type", error: String(err) });
@@ -581,6 +617,14 @@ router.post("/categories", async (req: Request, res: Response) => {
       name,
       examBodyId
     }).returning();
+
+    // Log the activity
+    await logActivity({
+      type: 'exam_content',
+      action: 'Created Category',
+      user: name,
+      details: `Body ID: ${examBodyId}`,
+    });
 
     return res.json(newCategory);
   } catch (err: any) {
@@ -891,8 +935,8 @@ router.post("/questions/:id/transition", async (req: Request, res: Response) => 
     const { newStatus, reason } = req.body;
     const { transitionQuestionStatus } = await import("../utils/questionLifecycle");
 
-    // Get user ID from session (assuming it's available)
-    const userId = "admin"; // TODO: Get from session
+    // Get user ID from session
+    const userId = (req as any).adminUser.id;
 
     const result = await transitionQuestionStatus(id, newStatus, userId, reason);
 
@@ -911,7 +955,7 @@ router.post("/questions/bulk-transition", async (req: Request, res: Response) =>
     const { questionIds, newStatus, reason } = req.body;
     const { bulkTransitionQuestions } = await import("../utils/questionLifecycle");
 
-    const userId = "admin"; // TODO: Get from session
+    const userId = (req as any).adminUser.id;
 
     const results = await bulkTransitionQuestions(questionIds, newStatus, userId, reason);
 
@@ -942,7 +986,7 @@ router.post("/questions/:id/restore/:version", async (req: Request, res: Respons
     const { id, version } = req.params;
     const { restoreQuestionVersion } = await import("../utils/questionLifecycle");
 
-    const userId = "admin"; // TODO: Get from session
+    const userId = (req as any).adminUser.id;
     const versionNumber = parseInt(version);
 
     const result = await restoreQuestionVersion(id, versionNumber, userId);
@@ -3879,6 +3923,14 @@ router.post("/blog", async (req: Request, res: Response) => {
       published: published !== undefined ? published : true
     }).returning();
 
+    // Log the activity
+    await logActivity({
+      type: 'exam_content',
+      action: 'Created Blog Post',
+      user: title,
+      details: `Slug: ${slug}, Type: ${contentType || "note"}`,
+    });
+
     return res.status(201).json(newPost);
   } catch (err: any) {
     console.error("Error creating blog post:", err);
@@ -3995,6 +4047,14 @@ router.put("/users/:id/ban", requireAdmin, async (req: Request, res: Response) =
 
     console.log(`[ADMIN] User ${isBanned ? "BANNED" : "UNBANNED"}: ${updated.email} by admin`);
 
+    // Log the activity
+    await logActivity({
+      type: 'user',
+      action: isBanned ? 'Banned User' : 'Unbanned User',
+      user: updated.email || updated.username,
+      details: isBanned ? `Reason: ${reason || "Banned by admin"}` : 'User unbanned',
+    });
+
     return res.json({
       message: `User ${isBanned ? "banned" : "unbanned"} successfully`,
       user: {
@@ -4043,6 +4103,14 @@ router.delete("/users/:id", requireAdmin, async (req: Request, res: Response) =>
     await db.delete(users).where(eq(users.id, id));
 
     console.log(`[ADMIN] User DELETED: ${targetUser.email} (ID: ${id})`);
+
+    // Log the activity
+    await logActivity({
+      type: 'user',
+      action: 'Deleted User',
+      user: targetUser.email || targetUser.username,
+      details: `User ID: ${id}`,
+    });
 
     return res.json({
       message: "User deleted successfully",
@@ -4095,6 +4163,14 @@ router.delete("/users/test-users", requireAdmin, async (req: Request, res: Respo
     console.log(`[ADMIN] BULK DELETE: ${testUsers.length} test users deleted`);
     testUsers.forEach(u => console.log(`  - ${u.email || u.username}`));
 
+    // Log the activity
+    await logActivity({
+      type: 'user',
+      action: 'Bulk Delete Test Users',
+      user: 'Multiple Users',
+      details: `${testUsers.length} test users deleted`,
+    });
+
     return res.json({
       message: `Successfully deleted ${testUsers.length} test users`,
       deletedCount: testUsers.length,
@@ -4135,4 +4211,186 @@ router.get("/users", requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
+// ============================================
+// QUESTION BANK STATS ENDPOINT
+// ============================================
+
+router.get("/question-bank-stats", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    // Fetch all required data
+    const bodies = await db.select().from(examBodies).orderBy(examBodies.name);
+    const cats = await db.select().from(categories).orderBy(categories.name);
+    const subs = await db.select().from(subjects).orderBy(subjects.name);
+
+    // Get question counts per subject using a single query for efficiency
+    const questionCounts = await db
+      .select({
+        subjectId: questions.subjectId,
+        count: count()
+      })
+      .from(questions)
+      .groupBy(questions.subjectId);
+
+    const countMap = new Map(questionCounts.map(q => [q.subjectId, Number(q.count)]));
+
+    // Construct the selection hierarchy
+    const result = bodies.map(body => {
+      const bodyCategories = cats
+        .filter(cat => cat.examBodyId === body.id)
+        .map(cat => {
+          const catSubjects = subs
+            .filter(sub => sub.examBodyId === body.id && sub.categoryId === cat.id)
+            .map(sub => ({
+              id: sub.id,
+              name: sub.name,
+              questionCount: countMap.get(sub.id) || 0
+            }));
+
+          return {
+            id: cat.id,
+            name: cat.name,
+            subjects: catSubjects,
+            questionCount: catSubjects.reduce((acc, s) => acc + s.questionCount, 0)
+          };
+        });
+
+      return {
+        id: body.id,
+        name: body.name,
+        categories: bodyCategories,
+        questionCount: bodyCategories.reduce((acc, c) => acc + c.questionCount, 0)
+      };
+    });
+
+    return res.json(result);
+  } catch (err: any) {
+    console.error("Error fetching question bank stats:", err);
+    return res.status(500).json({ message: "Failed to fetch question bank stats", error: err.message || String(err) });
+  }
+});
+
+// ============================================
+// ACTIVITY LOGS ENDPOINTS
+// ============================================
+
+router.get("/activity-logs", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+    const type = req.query.type as string;
+
+    let query = db
+      .select({
+        id: activityLogs.id,
+        type: activityLogs.type,
+        action: activityLogs.action,
+        user: activityLogs.user,
+        details: activityLogs.details,
+        timestamp: activityLogs.timestamp,
+        actorId: activityLogs.actorId,
+      })
+      .from(activityLogs);
+
+    if (type && type !== "all") {
+      query = query.where(eq(activityLogs.type, type)) as any;
+    }
+
+    const logs = await query
+      .orderBy(desc(activityLogs.timestamp))
+      .limit(limit);
+
+    return res.json(logs);
+  } catch (err: any) {
+    console.error("Error fetching activity logs:", err);
+    return res.status(500).json({ message: "Failed to fetch activity logs", error: err.message || String(err) });
+  }
+});
+
 export default router;
+
+// ============================================
+// TUTOR MANAGEMENT ENDPOINTS (Admin Only)
+// ============================================
+
+// Get list of pending tutor requests
+router.get("/tutors/pending", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const pendingTutors = await db
+      .select({
+        id: tutorProfiles.id,
+        userId: tutorProfiles.userId,
+        status: tutorProfiles.status,
+        createdAt: tutorProfiles.createdAt,
+        username: users.username,
+        email: users.email,
+        phone: users.phone
+      })
+      .from(tutorProfiles)
+      .leftJoin(users, eq(tutorProfiles.userId, users.id))
+      .where(eq(tutorProfiles.status, "pending"))
+      .orderBy(desc(tutorProfiles.createdAt));
+
+    return res.json(pendingTutors);
+  } catch (err: any) {
+    console.error("Error fetching pending tutors:", err);
+    return res.status(500).json({ message: "Failed to fetch pending tutors", error: err.message || String(err) });
+  }
+});
+
+// Approve a tutor and set quota
+router.post("/tutor/approve", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { userId, studentQuota } = req.body;
+    const adminId = (req as any).user?.id;
+
+    if (!userId) {
+      return res.status(400).json({ message: "userId is required" });
+    }
+
+    if (typeof studentQuota !== "number" || studentQuota < 0) {
+      return res.status(400).json({ message: "Valid studentQuota is required" });
+    }
+
+    // Check if profile exists
+    const profile = await db
+      .select()
+      .from(tutorProfiles)
+      .where(eq(tutorProfiles.userId, userId))
+      .limit(1);
+
+    if (profile.length === 0) {
+      return res.status(404).json({ message: "Tutor request not found" });
+    }
+
+    // Update profile and user role
+    await db.transaction(async (tx) => {
+      await tx
+        .update(tutorProfiles)
+        .set({
+          status: "approved",
+          studentQuota,
+          approvedByAdminId: adminId,
+        })
+        .where(eq(tutorProfiles.userId, userId));
+
+      await tx
+        .update(users)
+        .set({ role: "tutor" })
+        .where(eq(users.id, userId));
+    });
+
+    const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+
+    // Log activity
+    await logActivity({
+      type: 'user',
+      action: 'Approved Tutor',
+      user: user[0]?.email || userId,
+      details: `Quota: ${studentQuota}`,
+    });
+
+    return res.json({ message: "Tutor approved successfully", userId, studentQuota });
+  } catch (err: any) {
+    console.error("Error approving tutor:", err);
+    return res.status(500).json({ message: "Failed to approve tutor", error: err.message || String(err) });
+  }
+});

@@ -4,12 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { 
-  CheckCircle2, 
-  XCircle, 
-  AlertCircle, 
-  Clock, 
-  Share2, 
+import {
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Clock,
+  Share2,
   RotateCcw,
   ArrowRight,
   ChevronDown
@@ -146,15 +146,15 @@ export default function Results() {
     <AppLayout>
       <div className="max-w-4xl mx-auto space-y-8 pb-12">
         {/* Header */}
-        <div className="text-center space-y-4">
-          <Badge className="bg-green-100 text-green-700 hover:bg-green-200 text-sm px-4 py-1">Exam Completed</Badge>
-          <h1 className={`text-4xl font-display font-bold ${feedback.color}`}>
+        <div className="text-center space-y-3 sm:space-y-4 px-4">
+          <Badge className="bg-green-100 text-green-700 hover:bg-green-200 text-xs sm:text-sm px-3 sm:px-4 py-0.5 sm:py-1">Exam Completed</Badge>
+          <h1 className={`text-2xl sm:text-3xl md:text-4xl font-display font-bold ${feedback.color} leading-tight`}>
             {feedback.message} {feedback.emoji}
           </h1>
-          <p className="text-muted-foreground text-lg">
-            {attempt ? `You completed ${attempt.examId}` : "You've completed the JAMB Mathematics 2024 Practice Test."}
+          <p className="text-muted-foreground text-sm sm:text-lg">
+            {attempt ? `You completed ${attempt.examId}` : "Practice Test Completed"}
           </p>
-          <p className={`text-base ${feedback.color} font-medium max-w-2xl mx-auto`}>
+          <p className={`text-sm sm:text-base ${feedback.color} font-medium max-w-2xl mx-auto leading-relaxed`}>
             {feedback.description}
           </p>
         </div>
@@ -162,39 +162,39 @@ export default function Results() {
         {/* Score Card */}
         <Card className="border-t-4 border-t-primary shadow-lg">
           <CardContent className="p-8 md:p-12">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-              <div className="text-center md:text-left space-y-2">
-                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Score</p>
-                <div className="flex items-baseline gap-2 justify-center md:justify-start">
-                  <span className="text-6xl font-bold font-display text-primary">{accuracy}</span>
-                  <span className="text-2xl text-muted-foreground font-medium">/ 100</span>
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6 sm:gap-8 lg:gap-12">
+              <div className="text-center md:text-left space-y-1 sm:space-y-4">
+                <p className="text-[10px] sm:text-xs lg:text-sm font-bold text-muted-foreground uppercase tracking-widest">Total Accuracy</p>
+                <div className="flex items-baseline gap-1 sm:gap-2 justify-center md:justify-start">
+                  <span className="text-5xl sm:text-6xl lg:text-8xl font-black font-display text-primary tabular-nums tracking-tighter">{accuracy}</span>
+                  <span className="text-xl sm:text-2xl lg:text-4xl text-muted-foreground font-bold">/ 100</span>
                 </div>
-                <p className="text-sm font-medium text-green-600 flex items-center justify-center md:justify-start gap-1">
-                  <span className="bg-green-100 px-2 py-0.5 rounded-full">{accuracy}%</span> completion rate
+                <p className="text-xs sm:text-sm lg:text-base font-semibold text-green-600 flex items-center justify-center md:justify-start gap-1">
+                  <span className="bg-green-100 px-3 py-1 rounded-full">{accuracy}%</span> accuracy rate
                 </p>
               </div>
 
-              <div className="flex gap-8 text-center">
+              <div className="grid grid-cols-3 gap-4 sm:gap-8 text-center w-full md:w-auto">
                 <div>
-                  <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 mx-auto mb-2">
-                    <CheckCircle2 className="h-6 w-6" />
+                  <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 mx-auto mb-1 sm:mb-2">
+                    <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6" />
                   </div>
-                  <p className="text-2xl font-bold">{correctAnswers}</p>
-                  <p className="text-xs text-muted-foreground font-medium uppercase">Correct</p>
+                  <p className="text-xl sm:text-2xl font-bold tabular-nums">{correctAnswers}</p>
+                  <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-tighter sm:tracking-normal">Correct</p>
                 </div>
                 <div>
-                  <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 mx-auto mb-2">
-                    <XCircle className="h-6 w-6" />
+                  <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 mx-auto mb-1 sm:mb-2">
+                    <XCircle className="h-5 w-5 sm:h-6 sm:w-6" />
                   </div>
-                  <p className="text-2xl font-bold">{totalAnswered - correctAnswers}</p>
-                  <p className="text-xs text-muted-foreground font-medium uppercase">Incorrect</p>
+                  <p className="text-xl sm:text-2xl font-bold tabular-nums">{totalAnswered - correctAnswers}</p>
+                  <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-tighter sm:tracking-normal">Incorrect</p>
                 </div>
                 <div>
-                  <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 mx-auto mb-2">
-                    <AlertCircle className="h-6 w-6" />
+                  <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 mx-auto mb-1 sm:mb-2">
+                    <AlertCircle className="h-5 w-5 sm:h-6 sm:w-6" />
                   </div>
-                  <p className="text-2xl font-bold">{totalQuestions - totalAnswered}</p>
-                  <p className="text-xs text-muted-foreground font-medium uppercase">Unanswered</p>
+                  <p className="text-xl sm:text-2xl font-bold tabular-nums">{totalQuestions - totalAnswered}</p>
+                  <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-tighter sm:tracking-normal">Skipped</p>
                 </div>
               </div>
             </div>
@@ -206,7 +206,7 @@ export default function Results() {
                 <div className="flex justify-between text-sm">
                   <span>Time Taken</span>
                   <span className="font-bold">
-                    {attempt.durationSeconds 
+                    {attempt.durationSeconds
                       ? `${Math.floor(attempt.durationSeconds / 60)}m ${attempt.durationSeconds % 60}s`
                       : "N/A"}
                   </span>
@@ -279,7 +279,7 @@ export default function Results() {
                     <AccordionContent className="pl-14 pb-4">
                       <div className="bg-muted/30 p-4 rounded-lg space-y-2">
                         {!item.correct && (
-                           <p className="text-sm font-semibold text-green-700">Correct Answer: {item.correctAnswer}</p>
+                          <p className="text-sm font-semibold text-green-700">Correct Answer: {item.correctAnswer}</p>
                         )}
                         <p className="text-sm text-muted-foreground"><span className="font-semibold text-foreground">Explanation:</span> {item.explanation}</p>
                       </div>

@@ -1,9 +1,9 @@
 import { Link, useLocation } from "wouter";
-import { 
-  LayoutDashboard, 
-  BookOpen, 
-  BarChart2, 
-  Settings, 
+import {
+  LayoutDashboard,
+  BookOpen,
+  BarChart2,
+  Settings,
   LogOut,
   Bell,
   Search,
@@ -76,7 +76,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const displayName = userData?.username || user?.email?.split("@")[0] || "User";
   // Show plan name in subscription label
-  const planDisplayName = userData?.subscriptionPlan 
+  const planDisplayName = userData?.subscriptionPlan
     ? userData.subscriptionPlan.charAt(0).toUpperCase() + userData.subscriptionPlan.slice(1)
     : "Basic";
   const subscriptionLabel = `PrepMaster Student • ${planDisplayName}`;
@@ -109,14 +109,13 @@ export function AppLayout({ children }: AppLayoutProps) {
         {sidebarLinks.map((link) => {
           const isActive = location === link.href;
           return (
-            <Link 
-              key={link.href} 
+            <Link
+              key={link.href}
               href={link.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${
-                isActive 
-                  ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" 
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${isActive
+                  ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              }`}
+                }`}
             >
               <link.icon className={`h-5 w-5 ${isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary"}`} />
               <span className="font-medium">{link.label}</span>
@@ -158,27 +157,27 @@ export function AppLayout({ children }: AppLayoutProps) {
             </Link>
           </div>
 
-          <div className="hidden md:flex items-center max-w-md w-full relative">
+          <div className="hidden lg:flex items-center max-w-md w-full relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Search for topics, exams..." className="pl-10 bg-muted/50 border-transparent focus:bg-background focus:border-input transition-all" />
           </div>
 
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="relative">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <Button variant="ghost" size="icon" className="relative hidden sm:flex">
               <Bell className="h-5 w-5 text-muted-foreground" />
               <span className="absolute top-2 right-2 h-2 w-2 bg-destructive rounded-full border-2 border-background" />
             </Button>
-            <div className="h-8 w-[1px] bg-border mx-2 hidden sm:block" />
+            <div className="h-8 w-[1px] bg-border mx-1 hidden sm:block" />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                  <div className="text-right hidden sm:block">
+                <button className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity">
+                  <div className="text-right hidden md:block">
                     <p className="text-sm font-semibold">{displayName}</p>
                     <p className="text-xs text-muted-foreground">{subscriptionLabel}</p>
                   </div>
-                  <Avatar className="h-9 w-9 border-2 border-background ring-2 ring-border">
+                  <Avatar className="h-8 w-8 sm:h-9 sm:w-9 border-2 border-background ring-2 ring-border">
                     <AvatarImage src={user?.user_metadata?.avatar_url} />
-                    <AvatarFallback>{initials}</AvatarFallback>
+                    <AvatarFallback className="text-xs">{initials}</AvatarFallback>
                   </Avatar>
                 </button>
               </DropdownMenuTrigger>

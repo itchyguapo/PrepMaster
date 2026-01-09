@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { authLimiter, userSyncLimiter } from "../middleware/rateLimiter";
 import { db } from "../db";
-import { users, subscriptions, attempts } from "@shared/schema";
+import { users, subscriptions, attempts, tutorProfiles } from "@shared/schema";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { isAdminEmail, normalizeEmail } from "../utils/adminEmails";
 import { ExamLimitService, TIER_LIMITS } from "../services/ExamLimitService";
@@ -284,6 +284,27 @@ router.get("/me", async (req: Request, res: Response) => {
     const canAccessExams = true; // All plans can access exams, but Basic has daily limit enforced in exam generation
     const canDownloadOffline = plan === "standard" || plan === "premium";
 
+    let tutorPlan = null;
+    let studentQuota = null;
+
+    if (user.role === "tutor") {
+      const profile = await db
+        .select()
+        .from(tutorProfiles)
+        .where(eq(tutorProfiles.userId, user.id))
+        .limit(1);
+
+      if (profile.length > 0) {
+        studentQuota = profile[0].studentQuota;
+        // Logic for tutor plan display
+        if (studentQuota <= 50) tutorPlan = "Basic Tutor";
+        else if (studentQuota <= 500) tutorPlan = "Professional Tutor";
+        else tutorPlan = "Institutional Tutor";
+      } else {
+        tutorPlan = "Standard Tutor";
+      }
+    }
+
     return res.json({
       id: user.id,
       username: user.username,
@@ -298,6 +319,8 @@ router.get("/me", async (req: Request, res: Response) => {
       canAccessExams,
       canDownloadOffline,
       canAccessTutorMode,
+      tutorPlan,
+      studentQuota,
       createdAt: user.createdAt,
     });
   } catch (err: any) {

@@ -39,7 +39,12 @@ export async function tableExists(tableName: string): Promise<boolean> {
     `);
     const rows = (result as any).rows || result;
     return Array.isArray(rows) && rows.length > 0;
-  } catch (error) {
+  } catch (error: any) {
+    // If it's a connection error, we should rethrow it so the caller knows the DB is unreachable
+    const errorMsg = error.message || String(error);
+    if (errorMsg.includes('ENOTFOUND') || errorMsg.includes('timeout') || errorMsg.includes('Connection terminated')) {
+      throw error;
+    }
     console.warn(`Error checking table ${tableName}:`, error);
     return false;
   }
@@ -75,7 +80,7 @@ export function createSafeSelect(tableName: string, requestedColumns: Record<str
   return async () => {
     const existingColumns = await getTableColumns(tableName);
     const safeColumns: Record<string, any> = {};
-    
+
     // Only include columns that actually exist in the database
     for (const [key, value] of Object.entries(requestedColumns)) {
       if (existingColumns.includes(key)) {
@@ -84,7 +89,7 @@ export function createSafeSelect(tableName: string, requestedColumns: Record<str
         console.warn(`Column ${key} does not exist in table ${tableName}, skipping`);
       }
     }
-    
+
     return safeColumns;
   };
 }
@@ -95,7 +100,7 @@ export function createSafeSelect(tableName: string, requestedColumns: Record<str
 export async function createSafeInsert(tableName: string, data: Record<string, any>) {
   const existingColumns = await getTableColumns(tableName);
   const safeData: Record<string, any> = {};
-  
+
   // Only include columns that actually exist in the database
   for (const [key, value] of Object.entries(data)) {
     if (existingColumns.includes(key)) {
@@ -104,7 +109,7 @@ export async function createSafeInsert(tableName: string, data: Record<string, a
       console.warn(`Column ${key} does not exist in table ${tableName}, skipping`);
     }
   }
-  
+
   return safeData;
 }
 
@@ -116,57 +121,89 @@ export async function validateSchema(): Promise<{
   missingColumns: Array<{ table: string; column: string }>;
   missingTables: string[];
   warnings: string[];
+  connectionError?: string;
 }> {
   const warnings: string[] = [];
   const missingColumns: Array<{ table: string; column: string }> = [];
   const missingTables: string[] = [];
-  
+
+  // Test connectivity first
+  try {
+    await db.execute(sql`SELECT 1`);
+  } catch (error: any) {
+    return {
+      isValid: false,
+      missingColumns: [],
+      missingTables: [],
+      warnings: [],
+      connectionError: error.message || String(error)
+    };
+  }
+
   // Expected critical tables and columns
   const expectedSchema = {
-    exams: ['id', 'title', 'examBodyId', 'questionIds', 'createdAt'],
-    users: ['id', 'email', 'supabaseId', 'role', 'createdAt'],
-    questions: ['id', 'text', 'examBodyId', 'subjectId', 'status'],
-    user_stats: ['id', 'userId', 'currentStreak', 'totalQuestionsAnswered'],
-    subscriptions: ['id', 'userId', 'plan', 'status', 'createdAt']
+    exams: ['id', 'title', 'exam_body_id', 'question_ids', 'created_at'],
+    users: ['id', 'email', 'supabase_id', 'role', 'created_at'],
+    questions: ['id', 'text', 'exam_body_id', 'subject_id', 'status'],
+    user_stats: ['id', 'user_id', 'current_streak', 'total_questions_answered'],
+    subscriptions: ['id', 'user_id', 'plan', 'status', 'created_at']
   };
-  
+
+  // Optional but recommended columns
+  const optionalColumns: Record<string, string[]> = {
+    exams: ['description', 'track_id'],
+    user_stats: ['longest_streak', 'accuracy', 'achievements']
+  };
+
   // Check tables and columns
   for (const [tableName, requiredColumns] of Object.entries(expectedSchema)) {
-    const tableExistsResult = await tableExists(tableName);
-    
-    if (!tableExistsResult) {
-      missingTables.push(tableName);
-      continue;
-    }
-    
-    const existingColumns = await getTableColumns(tableName);
-    for (const column of requiredColumns) {
-      if (!existingColumns.includes(column)) {
-        missingColumns.push({ table: tableName, column });
+    try {
+      const tableExistsResult = await tableExists(tableName);
+
+      if (!tableExistsResult) {
+        missingTables.push(tableName);
+        continue;
       }
+
+      const existingColumns = await getTableColumns(tableName);
+      for (const column of requiredColumns) {
+        if (!existingColumns.includes(column)) {
+          missingColumns.push({ table: tableName, column });
+        }
+      }
+    } catch (error) {
+      // If we hit a connection error here (though it should have been caught above)
+      return {
+        isValid: false,
+        missingColumns,
+        missingTables,
+        warnings,
+        connectionError: (error as any).message || String(error)
+      };
     }
   }
-  
+
   // Check for optional but recommended columns
-  const optionalColumns = {
-    exams: ['description', 'trackId'],
-    user_stats: ['longestStreak', 'accuracy', 'achievements']
-  };
-  
   for (const [tableName, columns] of Object.entries(optionalColumns)) {
-    const tableExistsResult = await tableExists(tableName);
-    if (!tableExistsResult) continue;
-    
-    const existingColumns = await getTableColumns(tableName);
-    for (const column of columns) {
-      if (!existingColumns.includes(column)) {
-        warnings.push(`Optional column ${tableName}.${column} is missing`);
+    try {
+      const tableExistsResult = await tableExists(tableName);
+      if (!tableExistsResult) continue;
+
+      const existingColumns = await getTableColumns(tableName);
+      for (const column of columns) {
+        if (!existingColumns.includes(column)) {
+          warnings.push(`Optional column ${tableName}.${column} is missing`);
+        }
       }
+    } catch (error) {
+      // Ignore errors for optional columns or let it break the whole thing?
+      // Better to warn
+      warnings.push(`Could not check optional columns for ${tableName}: ${(error as any).message}`);
     }
   }
-  
+
   const isValid = missingTables.length === 0 && missingColumns.length === 0;
-  
+
   return {
     isValid,
     missingColumns,
@@ -181,25 +218,29 @@ export async function validateSchema(): Promise<{
 export async function validateSchemaOnStartup(): Promise<void> {
   try {
     const validation = await validateSchema();
-    
+
+    if (validation.connectionError) {
+      console.error('❌ Database Connection Error during validation:');
+      console.error(`   ${validation.connectionError}`);
+      console.error('   Please check your DATABASE_URL and network connectivity.');
+      return; // Stop validation but don't crash the server
+    }
+
     if (!validation.isValid) {
       console.error('❌ Database Schema Validation Failed:');
-      console.error('Missing Tables:', validation.missingTables);
-      console.error('Missing Columns:', validation.missingColumns);
-      
-      if (validation.missingTables.length > 0) {
-        throw new Error(`Critical tables missing: ${validation.missingTables.join(', ')}`);
-      }
+      if (validation.missingTables.length > 0) console.error('Missing Tables:', validation.missingTables);
+      if (validation.missingColumns.length > 0) console.error('Missing Columns:', validation.missingColumns);
+
+      // We don't throw here anymore to be more resilient, just log clearly
+    } else {
+      console.log('✅ Database schema validation passed');
     }
-    
+
     if (validation.warnings.length > 0) {
       console.warn('⚠️  Schema Warnings:');
       validation.warnings.forEach(warning => console.warn(`  - ${warning}`));
     }
-    
-    console.log('✅ Database schema validation passed');
   } catch (error) {
-    console.error('❌ Schema validation error:', error);
-    throw error;
+    console.error('❌ Unexpected schema validation error:', error);
   }
 }

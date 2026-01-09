@@ -480,8 +480,8 @@ export default function UserManagement() {
             {loading ? (
               <div className="text-center py-8 text-muted-foreground">Loading users...</div>
             ) : (
-              <div className="rounded-md border">
-                <table className="w-full text-sm">
+              <div className="rounded-md border overflow-x-auto">
+                <table className="w-full text-sm min-w-[800px] sm:min-w-0">
                   <thead>
                     <tr className="border-b bg-muted/50">
                       <th className="h-12 px-4 text-left font-medium text-muted-foreground w-12">

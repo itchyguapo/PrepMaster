@@ -25,33 +25,32 @@ export function Navbar() {
         </Link>
 
         {/* Desktop Nav */}
-        <div className="hidden md:flex items-center gap-6">
+        <div className="hidden md:flex items-center gap-6 lg:gap-8">
           {links.map((link) => (
-            <Link key={link.href} href={link.href} className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
+            <Link key={link.href} href={link.href} className="text-sm font-semibold text-muted-foreground hover:text-primary transition-colors">
               {link.label}
             </Link>
           ))}
-          
-          <div className="h-4 w-[1px] bg-border mx-2" />
-          
-          {/* Prototype Links for Reviewers */}
-          <div className="flex items-center gap-2">
-             <Link href="/tutor/login" className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1">
-                <GraduationCap className="h-3 w-3" /> Tutor Login
-            </Link>
-            <Link href="/admin" className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1">
-                <Shield className="h-3 w-3" /> Admin
-            </Link>
-          </div>
 
-          <div className="flex items-center gap-4 ml-4">
+          <div className="h-4 w-[1px] bg-border mx-1" />
+
+          <Link href="/tutor/login" className="text-sm font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+            <GraduationCap className="h-4 w-4" /> Tutor
+          </Link>
+          <Link href="/admin" className="text-sm font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+            <Shield className="h-4 w-4" /> Admin
+          </Link>
+
+          <div className="h-4 w-[1px] bg-border mx-1" />
+
+          <div className="flex items-center gap-4">
             <Link href="/login">
               <Button variant="ghost" className="font-semibold text-muted-foreground hover:text-foreground">
                 Log in
               </Button>
             </Link>
             <Link href="/signup">
-              <Button className="bg-primary hover:bg-primary/90 text-white font-semibold shadow-lg shadow-primary/20">
+              <Button className="bg-primary hover:bg-primary/90 text-white font-bold px-6 shadow-xl shadow-primary/20 transition-all hover:-translate-y-0.5 active:translate-y-0">
                 Start Practicing
               </Button>
             </Link>
@@ -74,10 +73,10 @@ export function Navbar() {
                   </Link>
                 ))}
                 <Link href="/admin" className="text-lg font-medium hover:text-primary transition-colors flex items-center gap-2" onClick={() => setIsOpen(false)}>
-                      <Shield className="h-4 w-4" /> Admin Portal
+                  <Shield className="h-4 w-4" /> Admin Portal
                 </Link>
                 <Link href="/tutor/login" className="text-lg font-medium hover:text-primary transition-colors flex items-center gap-2" onClick={() => setIsOpen(false)}>
-                      <GraduationCap className="h-4 w-4" /> Tutor Login
+                  <GraduationCap className="h-4 w-4" /> Tutor Login
                 </Link>
               </div>
               <div className="flex flex-col gap-4">

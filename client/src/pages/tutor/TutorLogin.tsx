@@ -7,8 +7,19 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Mail, Phone, Loader2, ArrowLeft, GraduationCap, Users } from "lucide-react";
+import { Mail, Phone, Loader2, ArrowLeft, GraduationCap, Users, Building2, Send, CheckCircle2 } from "lucide-react";
 import { validateEmail } from "@/lib/sanitize";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
 
 export default function TutorLogin() {
   const [, setLocation] = useLocation();
@@ -21,6 +32,8 @@ export default function TutorLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"email" | "phone">("email");
+  const [isInquiryOpen, setIsInquiryOpen] = useState(false);
+  const { toast } = useToast();
 
   // Redirect based on role after successful login
   useEffect(() => {
@@ -28,7 +41,7 @@ export default function TutorLogin() {
       // Small delay to ensure all data is loaded
       const timer = setTimeout(() => {
         if (userRole === "tutor") {
-          setLocation("/tutor/dashboard");
+          setLocation("/tutor");
         } else if (userRole === "admin") {
           setLocation("/admin");
         } else {
@@ -139,22 +152,50 @@ export default function TutorLogin() {
   };
 
   const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
+    // ... code ...
+  };
 
+  const [inquiryData, setInquiryData] = useState({
+    institutionName: "",
+    contactName: "",
+    email: "",
+    phone: "",
+    studentCount: "1-50",
+    useCase: "",
+  });
+  const [inquiryLoading, setInquiryLoading] = useState(false);
+  const [inquirySuccess, setInquirySuccess] = useState(false);
+
+  const handleInquirySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInquiryLoading(true);
     try {
-      const { error } = await verifyOTP(phone, otp);
-      if (error) {
-        setError(error.message || "Invalid OTP");
-        setLoading(false);
-      } else {
-        // Redirect will happen via useEffect when userRole is loaded
-        setLoading(false);
-      }
+      await apiRequest("POST", "/api/tutor-inquiries", inquiryData);
+      setInquirySuccess(true);
+      toast({
+        title: "Inquiry Sent!",
+        description: "We've received your request and will contact you soon.",
+      });
+      setTimeout(() => {
+        setIsInquiryOpen(false);
+        setInquirySuccess(false);
+        setInquiryData({
+          institutionName: "",
+          contactName: "",
+          email: "",
+          phone: "",
+          studentCount: "1-50",
+          useCase: "",
+        });
+      }, 3000);
     } catch (err: any) {
-      setError(err.message || "An error occurred");
-      setLoading(false);
+      toast({
+        title: "Submission failed",
+        description: err.message || "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setInquiryLoading(false);
     }
   };
 
@@ -380,9 +421,106 @@ export default function TutorLogin() {
                 <Users className="h-5 w-5 text-primary mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-primary">For Tutors & Schools</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground mt-1 mb-3">
                     Don't have a tutor account? Contact us for custom pricing and access.
                   </p>
+                  <Dialog open={isInquiryOpen} onOpenChange={setIsInquiryOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full">
+                        Submit Inquiry
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[500px]">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <Building2 className="h-5 w-5 text-primary" />
+                          Institution Inquiry
+                        </DialogTitle>
+                        <DialogDescription>
+                          Fill out this form and our team will get back to you with a custom quote.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      {inquirySuccess ? (
+                        <div className="py-12 text-center space-y-4">
+                          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                            <CheckCircle2 className="h-10 w-10 text-green-600" />
+                          </div>
+                          <h3 className="text-xl font-bold">Inquiry Submitted!</h3>
+                          <p className="text-muted-foreground">Thank you for your interest. We'll be in touch shortly.</p>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleInquirySubmit} className="space-y-4 pt-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="institution">Institution Name</Label>
+                              <Input
+                                id="institution"
+                                required
+                                value={inquiryData.institutionName}
+                                onChange={(e) => setInquiryData({ ...inquiryData, institutionName: e.target.value })}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="contact">Contact Name</Label>
+                              <Input
+                                id="contact"
+                                required
+                                value={inquiryData.contactName}
+                                onChange={(e) => setInquiryData({ ...inquiryData, contactName: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="iq-email">Email Address</Label>
+                              <Input
+                                id="iq-email"
+                                type="email"
+                                required
+                                value={inquiryData.email}
+                                onChange={(e) => setInquiryData({ ...inquiryData, email: e.target.value })}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="iq-phone">Phone Number</Label>
+                              <Input
+                                id="iq-phone"
+                                value={inquiryData.phone}
+                                onChange={(e) => setInquiryData({ ...inquiryData, phone: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="student-count">Estimated Student Count</Label>
+                            <select
+                              id="student-count"
+                              className="w-full h-10 px-3 bg-background border rounded-md"
+                              value={inquiryData.studentCount}
+                              onChange={(e) => setInquiryData({ ...inquiryData, studentCount: e.target.value })}
+                            >
+                              <option value="1-50">1 - 50</option>
+                              <option value="51-100">51 - 100</option>
+                              <option value="101-500">101 - 500</option>
+                              <option value="500+">500+</option>
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="use-case">Tell us about your needs</Label>
+                            <Textarea
+                              id="use-case"
+                              placeholder="How do you plan to use PrepMaster?"
+                              value={inquiryData.useCase}
+                              onChange={(e) => setInquiryData({ ...inquiryData, useCase: e.target.value })}
+                            />
+                          </div>
+                          <Button type="submit" className="w-full" disabled={inquiryLoading}>
+                            {inquiryLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="h-4 w-4 mr-2" /> Send Inquiry</>}
+                          </Button>
+                        </form>
+                      )}
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
             </div>

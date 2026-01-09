@@ -108,7 +108,7 @@ export default function Home() {
             <p className="text-lg text-muted-foreground">Everything you need to ace your exams.</p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
             {[
               {
                 icon: Clock,
@@ -151,13 +151,13 @@ export default function Home() {
                 desc: "Monitor your improvement over time."
               }
             ].map((feature, i) => (
-              <Card key={i} className="border-border/50 hover:border-primary/50 transition-all hover:shadow-lg hover:-translate-y-1">
-                <CardContent className="p-8 space-y-4">
-                  <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-4">
+              <Card key={i} className="group border-border/50 hover:border-primary/50 transition-all hover:shadow-xl hover:-translate-y-1 bg-background/50 backdrop-blur-sm">
+                <CardContent className="p-6 lg:p-8 space-y-4">
+                  <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-4 transition-transform group-hover:scale-110 group-hover:rotate-3">
                     <feature.icon className="h-7 w-7" />
                   </div>
                   <h3 className="text-xl font-bold font-display">{feature.title}</h3>
-                  <p className="text-muted-foreground leading-relaxed">{feature.desc}</p>
+                  <p className="text-muted-foreground leading-relaxed text-sm lg:text-base">{feature.desc}</p>
                 </CardContent>
               </Card>
             ))}
@@ -216,7 +216,7 @@ export default function Home() {
             <h2 className="text-3xl md:text-4xl font-display font-bold">What Students Say</h2>
             <p className="text-lg text-muted-foreground">Real results from real students</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 max-w-6xl mx-auto">
             {[
               {
                 name: "Chiamaka O.",
@@ -237,21 +237,21 @@ export default function Home() {
                 improvement: "+52%"
               }
             ].map((testimonial, i) => (
-              <Card key={i} className="border-border/50 hover:border-primary/50 transition-all">
-                <CardContent className="p-6 space-y-4">
+              <Card key={i} className="border-border/50 hover:border-primary/50 transition-all bg-background/50">
+                <CardContent className="p-6 lg:p-8 space-y-4">
                   <div className="flex items-center gap-3">
                     <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
                       {testimonial.name.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-semibold">{testimonial.name}</p>
-                      <p className="text-sm text-muted-foreground">{testimonial.score}</p>
+                      <p className="font-bold">{testimonial.name}</p>
+                      <p className="text-xs text-muted-foreground font-medium">{testimonial.score}</p>
                     </div>
                   </div>
-                  <p className="text-muted-foreground italic">"{testimonial.quote}"</p>
+                  <p className="text-muted-foreground italic text-sm lg:text-base">"{testimonial.quote}"</p>
                   <div className="flex items-center gap-2 text-sm">
                     <TrendingUp className="h-4 w-4 text-green-500" />
-                    <span className="font-medium text-green-600">{testimonial.improvement} improvement</span>
+                    <span className="font-bold text-green-600 tracking-tight">{testimonial.improvement} improvement</span>
                   </div>
                 </CardContent>
               </Card>

@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { db } from "../db";
 import {
   tutorGroups,
-  groupMembers,
+  group_members,
   tutorAssignments,
   assignmentAttempts,
   tutorNotes,
@@ -13,14 +13,232 @@ import {
   subscriptions,
   examBodies,
   categories,
-  subjects
+  subjects,
+  tutorProfiles,
+  tutorExams,
+  tutorExamSubjects,
+  tutorExamQuestions,
+  tutorExamSessions,
+  tutorExamAnswers,
+  questionOptions as schemaQuestionOptions
 } from "@shared/schema";
 import { eq, and, or, inArray, desc, sql, count, gte, lt } from "drizzle-orm";
 import { requireTutor } from "../middleware/tutorAuth";
+import { PdfService } from "../services/PdfService";
 
 const router = Router();
 
-// All routes require tutor authentication
+// ========== PUBLIC / SHARED ENDPOINTS ==========
+
+// Request tutor access
+router.post("/request-access", async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    // Check if already has a profile
+    const existing = await db
+      .select()
+      .from(tutorProfiles)
+      .where(eq(tutorProfiles.userId, userId))
+      .limit(1);
+
+    if (existing.length > 0) {
+      return res.status(400).json({ message: "Request already submitted", status: existing[0].status });
+    }
+
+    const [newProfile] = await db
+      .insert(tutorProfiles)
+      .values({
+        userId,
+        status: "pending",
+        studentQuota: 0,
+      })
+      .returning();
+
+    return res.json(newProfile);
+  } catch (err: any) {
+    console.error("Error requesting tutor access:", err);
+    return res.status(500).json({ message: "Failed to submit request", error: err.message || String(err) });
+  }
+});
+
+// GET public exam info (Anonymous)
+router.get("/exams/:id/public", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const exam = await db
+      .select({
+        id: tutorExams.id,
+        title: tutorExams.title,
+        totalQuestions: tutorExams.totalQuestions,
+        timeLimitMinutes: tutorExams.timeLimitMinutes,
+        status: tutorExams.status,
+        expiresAt: tutorExams.expiresAt,
+      })
+      .from(tutorExams)
+      .where(eq(tutorExams.id, id))
+      .limit(1);
+
+    if (exam.length === 0) {
+      return res.status(404).json({ message: "Exam not found" });
+    }
+
+    if (exam[0].status !== "active") {
+      return res.status(403).json({ message: "Exam is not active", status: exam[0].status });
+    }
+
+    if (new Date(exam[0].expiresAt) < new Date()) {
+      return res.status(403).json({ message: "Exam has expired" });
+    }
+
+    return res.json(exam[0]);
+  } catch (err: any) {
+    console.error("Error fetching public exam:", err);
+    return res.status(500).json({ message: "Failed to fetch exam", error: err.message || String(err) });
+  }
+});
+
+// START public exam (Anonymous)
+router.post("/exams/:id/start", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { candidateName, candidateClass, candidateSchool } = req.body;
+
+    if (!candidateName || !candidateClass || !candidateSchool) {
+      return res.status(400).json({ message: "Candidate details are required" });
+    }
+
+    const exam = await db.select().from(tutorExams).where(eq(tutorExams.id, id)).limit(1);
+    if (exam.length === 0) return res.status(404).json({ message: "Exam not found" });
+
+    // Quota check
+    const usedQuota = await db
+      .select({ count: count() })
+      .from(tutorExamSessions)
+      .where(eq(tutorExamSessions.tutorExamId, id));
+
+    if (usedQuota[0].count >= exam[0].maxCandidates) {
+      return res.status(403).json({ message: "Exam candidate limit reached" });
+    }
+
+    // Duplicate check
+    const existing = await db
+      .select()
+      .from(tutorExamSessions)
+      .where(
+        and(
+          eq(tutorExamSessions.tutorExamId, id),
+          eq(tutorExamSessions.candidateName, candidateName),
+          eq(tutorExamSessions.candidateClass, candidateClass),
+          eq(tutorExamSessions.candidateSchool, candidateSchool)
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      return res.status(403).json({ message: "A candidate with these details has already started/submitted this exam" });
+    }
+
+    // Create session
+    const [session] = await db
+      .insert(tutorExamSessions)
+      .values({
+        tutorExamId: id,
+        candidateName,
+        candidateClass,
+        candidateSchool,
+        status: "in_progress",
+      })
+      .returning();
+
+    // Fetch questions (locked)
+    const lockedQuestions = await db
+      .select({
+        id: questions.id,
+        text: questions.text,
+        type: questions.type,
+        options: questions.options,
+        subjectId: tutorExamQuestions.subjectId,
+      })
+      .from(tutorExamQuestions)
+      .innerJoin(questions, eq(tutorExamQuestions.questionId, questions.id))
+      .where(eq(tutorExamQuestions.tutorExamId, id));
+
+    return res.json({ session, questions: lockedQuestions });
+  } catch (err: any) {
+    console.error("Error starting exam:", err);
+    return res.status(500).json({ message: "Failed to start exam", error: err.message || String(err) });
+  }
+});
+
+// SUBMIT public exam (Anonymous)
+router.post("/exams/sessions/:sessionId/submit", async (req: Request, res: Response) => {
+  try {
+    const { sessionId } = req.params;
+    const { responses } = req.body; // Map of questionId -> selectedOptionId
+
+    const session = await db.select().from(tutorExamSessions).where(eq(tutorExamSessions.id, sessionId)).limit(1);
+    if (session.length === 0) return res.status(404).json({ message: "Session not found" });
+
+    if (session[0].status === "submitted") {
+      return res.status(403).json({ message: "Exam already submitted" });
+    }
+
+    // Grading logic
+    let totalScore = 0;
+    const gradingResults: any[] = [];
+
+    const examQuestions = await db
+      .select({
+        id: questions.id,
+      })
+      .from(tutorExamQuestions)
+      .where(eq(tutorExamQuestions.tutorExamId, session[0].tutorExamId));
+
+    for (const q of examQuestions) {
+      const selectedOptionId = responses[q.id];
+      let isCorrect = false;
+
+      if (selectedOptionId) {
+        const option = await db.select().from(schemaQuestionOptions).where(eq(schemaQuestionOptions.id, selectedOptionId)).limit(1);
+        if (option.length > 0 && option[0].isCorrect) {
+          isCorrect = true;
+          totalScore++;
+        }
+      }
+
+      gradingResults.push({
+        tutorExamSessionId: sessionId,
+        questionId: q.id,
+        selectedOptionId: selectedOptionId || null,
+        isCorrect,
+      });
+    }
+
+    // Persist results
+    await db.transaction(async (tx) => {
+      await tx.insert(tutorExamAnswers).values(gradingResults);
+      await tx
+        .update(tutorExamSessions)
+        .set({
+          status: "submitted",
+          submittedAt: new Date(),
+          score: totalScore,
+        })
+        .where(eq(tutorExamSessions.id, sessionId));
+    });
+
+    return res.json({ message: "Exam submitted successfully", status: "submitted" });
+  } catch (err: any) {
+    console.error("Error submitting exam:", err);
+    return res.status(500).json({ message: "Failed to submit exam", error: err.message || String(err) });
+  }
+});
+
+// All routes below require tutor authentication
 router.use(requireTutor);
 
 // Helper to generate unique group code
@@ -42,7 +260,7 @@ router.get("/groups", async (req: Request, res: Response) => {
         description: tutorGroups.description,
         subject: tutorGroups.subject,
         examBodyId: tutorGroups.examBodyId,
-        categoryId: tutorGroups.trackId,
+        categoryId: tutorGroups.categoryId,
         maxStudents: tutorGroups.maxStudents,
         isActive: tutorGroups.isActive,
         groupCode: tutorGroups.groupCode,
@@ -50,9 +268,9 @@ router.get("/groups", async (req: Request, res: Response) => {
         updatedAt: tutorGroups.updatedAt,
         studentCount: sql<number>`(
           SELECT COUNT(*)::int 
-          FROM ${groupMembers} 
-          WHERE ${groupMembers.groupId} = ${tutorGroups.id} 
-          AND ${groupMembers.status} = 'active'
+          FROM ${group_members} 
+          WHERE ${group_members.groupId} = ${tutorGroups.id} 
+          AND ${group_members.status} = 'active'
         )`,
       })
       .from(tutorGroups)
@@ -102,7 +320,7 @@ router.post("/groups", async (req: Request, res: Response) => {
         description: description || null,
         subject: subject || null,
         examBodyId: examBodyId || null,
-        trackId: categoryId || null,
+        categoryId: categoryId || null,
         maxStudents: maxStudents || null,
         groupCode,
         isActive: true,
@@ -144,7 +362,7 @@ router.put("/groups/:id", async (req: Request, res: Response) => {
         description: description !== undefined ? description : existingGroup[0].description,
         subject: subject !== undefined ? subject : existingGroup[0].subject,
         examBodyId: examBodyId !== undefined ? examBodyId : existingGroup[0].examBodyId,
-        trackId: categoryId !== undefined ? categoryId : existingGroup[0].trackId,
+        categoryId: categoryId !== undefined ? categoryId : existingGroup[0].categoryId,
         maxStudents: maxStudents !== undefined ? maxStudents : existingGroup[0].maxStudents,
         isActive: isActive !== undefined ? isActive : existingGroup[0].isActive,
         updatedAt: new Date(),
@@ -210,18 +428,20 @@ router.get("/groups/:id/members", async (req: Request, res: Response) => {
 
     const members = await db
       .select({
-        id: groupMembers.id,
-        studentId: groupMembers.studentId,
-        joinedAt: groupMembers.joinedAt,
-        status: groupMembers.status,
-        role: groupMembers.role,
+        id: group_members.id,
+        studentId: group_members.studentId,
+        joinedAt: group_members.joinedAt,
+        status: group_members.status,
+        role: group_members.role,
+        guestName: group_members.guestName,
+        guestEmail: group_members.guestEmail,
         username: users.username,
         email: users.email,
       })
-      .from(groupMembers)
-      .leftJoin(users, eq(groupMembers.studentId, users.id))
-      .where(eq(groupMembers.groupId, id))
-      .orderBy(desc(groupMembers.joinedAt));
+      .from(group_members)
+      .leftJoin(users, eq(group_members.studentId, users.id))
+      .where(eq(group_members.groupId, id))
+      .orderBy(desc(group_members.joinedAt));
 
     return res.json(members);
   } catch (err: any) {
@@ -274,17 +494,17 @@ router.post("/groups/:id/members", async (req: Request, res: Response) => {
     // Check if already a member
     const existingMember = await db
       .select()
-      .from(groupMembers)
-      .where(and(eq(groupMembers.groupId, id), eq(groupMembers.studentId, targetStudentId)))
+      .from(group_members)
+      .where(and(eq(group_members.groupId, id), eq(group_members.studentId, targetStudentId)))
       .limit(1);
 
     if (existingMember.length > 0) {
       // Reactivate if removed
       if (existingMember[0].status === "removed") {
         const [updated] = await db
-          .update(groupMembers)
+          .update(group_members)
           .set({ status: "active" })
-          .where(eq(groupMembers.id, existingMember[0].id))
+          .where(eq(group_members.id, existingMember[0].id))
           .returning();
         return res.json(updated);
       }
@@ -292,7 +512,7 @@ router.post("/groups/:id/members", async (req: Request, res: Response) => {
     }
 
     const [newMember] = await db
-      .insert(groupMembers)
+      .insert(group_members)
       .values({
         groupId: id,
         studentId: targetStudentId,
@@ -311,11 +531,11 @@ router.post("/groups/:id/members", async (req: Request, res: Response) => {
   }
 });
 
-// Remove student from group
-router.delete("/groups/:id/members/:studentId", async (req: Request, res: Response) => {
+// Remove member from group
+router.delete("/groups/:id/members/:memberId", async (req: Request, res: Response) => {
   try {
     const tutorId = (req as any).tutorId;
-    const { id, studentId } = req.params;
+    const { id, memberId } = req.params;
 
     // Verify group belongs to tutor
     const existingGroup = await db
@@ -330,11 +550,11 @@ router.delete("/groups/:id/members/:studentId", async (req: Request, res: Respon
 
     // Mark as removed instead of deleting
     await db
-      .update(groupMembers)
+      .update(group_members)
       .set({ status: "removed" })
-      .where(and(eq(groupMembers.groupId, id), eq(groupMembers.studentId, studentId)));
+      .where(and(eq(group_members.groupId, id), eq(group_members.id, memberId)));
 
-    return res.json({ message: "Student removed from group" });
+    return res.json({ message: "Member removed from group" });
   } catch (err: any) {
     console.error("Error removing group member:", err);
     return res.status(500).json({
@@ -398,9 +618,9 @@ router.get("/assignments", async (req: Request, res: Response) => {
           CASE 
             WHEN ${tutorAssignments.groupId} IS NOT NULL THEN (
               SELECT COUNT(*)::int 
-              FROM ${groupMembers} 
-              WHERE ${groupMembers.groupId} = ${tutorAssignments.groupId}
-              AND ${groupMembers.status} = 'active'
+              FROM ${group_members} 
+              WHERE ${group_members.groupId} = ${tutorAssignments.groupId}
+              AND ${group_members.status} = 'active'
             )
             WHEN ${tutorAssignments.studentId} IS NOT NULL THEN 1
             ELSE 0
@@ -710,10 +930,10 @@ router.get("/students/:id/performance", async (req: Request, res: Response) => {
           or(
             eq(tutorAssignments.studentId, studentId),
             sql`${studentId} IN (
-              SELECT ${groupMembers.studentId} 
-              FROM ${groupMembers} 
-              WHERE ${groupMembers.groupId} = ${tutorAssignments.groupId}
-              AND ${groupMembers.status} = 'active'
+              SELECT ${group_members.studentId} 
+              FROM ${group_members} 
+              WHERE ${group_members.groupId} = ${tutorAssignments.groupId}
+              AND ${group_members.status} = 'active'
             )`
           )
         )
@@ -767,8 +987,8 @@ router.get("/groups/:id/analytics", async (req: Request, res: Response) => {
     // Get group members
     const members = await db
       .select()
-      .from(groupMembers)
-      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.status, "active")));
+      .from(group_members)
+      .where(and(eq(group_members.groupId, groupId), eq(group_members.status, "active")));
 
     // Get assignments for this group
     const groupAssignments = await db
@@ -812,52 +1032,232 @@ router.get("/groups/:id/analytics", async (req: Request, res: Response) => {
   }
 });
 
-// Get live assignment status
-router.get("/assignments/:id/live-status", async (req: Request, res: Response) => {
+// ========== TUTOR EXAM MANAGEMENT (V1) ==========
+
+// Get active tutor profile and quota
+router.get("/profile", async (req: Request, res: Response) => {
   try {
     const tutorId = (req as any).tutorId;
-    const { id: assignmentId } = req.params;
-
-    // Verify assignment belongs to tutor
-    const assignment = await db
+    const [profile] = await db
       .select()
-      .from(tutorAssignments)
-      .where(and(eq(tutorAssignments.id, assignmentId), eq(tutorAssignments.tutorId, tutorId)))
+      .from(tutorProfiles)
+      .where(eq(tutorProfiles.userId, tutorId))
       .limit(1);
 
-    if (assignment.length === 0) {
-      return res.status(404).json({ message: "Assignment not found" });
+    if (!profile) {
+      return res.status(404).json({ message: "Tutor profile not found" });
     }
 
-    // Get in-progress attempts
-    const liveAttempts = await db
+    return res.json(profile);
+  } catch (err: any) {
+    console.error("Error fetching tutor profile:", err);
+    return res.status(500).json({ message: "Failed to fetch profile", error: err.message || String(err) });
+  }
+});
+
+// List tutor's exams
+router.get("/exams", async (req: Request, res: Response) => {
+  try {
+    const tutorId = (req as any).tutorId;
+    const exams = await db
       .select({
-        id: assignmentAttempts.id,
-        studentId: assignmentAttempts.studentId,
-        startedAt: assignmentAttempts.startedAt,
-        username: users.username,
-        email: users.email,
+        id: tutorExams.id,
+        title: tutorExams.title,
+        status: tutorExams.status,
+        expiresAt: tutorExams.expiresAt,
+        totalQuestions: tutorExams.totalQuestions,
+        maxCandidates: tutorExams.maxCandidates,
+        createdAt: tutorExams.createdAt,
+        submissionCount: sql<number>`(SELECT COUNT(*)::int FROM ${tutorExamSessions} WHERE ${tutorExamSessions.tutorExamId} = ${tutorExams.id} AND ${tutorExamSessions.status} = 'submitted')`
       })
-      .from(assignmentAttempts)
-      .leftJoin(users, eq(assignmentAttempts.studentId, users.id))
-      .where(
-        and(
-          eq(assignmentAttempts.assignmentId, assignmentId),
-          eq(assignmentAttempts.status, "in_progress")
-        )
-      );
+      .from(tutorExams)
+      .where(eq(tutorExams.tutorId, tutorId))
+      .orderBy(desc(tutorExams.createdAt));
+
+    return res.json(exams);
+  } catch (err: any) {
+    console.error("Error fetching tutor exams:", err);
+    return res.status(500).json({ message: "Failed to fetch exams", error: err.message || String(err) });
+  }
+});
+
+// Create a new tutor exam with weighted question selection
+router.post("/exams", async (req: Request, res: Response) => {
+  try {
+    const tutorId = (req as any).tutorId;
+    const {
+      title,
+      examBodyId,
+      categoryId,
+      timeLimitMinutes,
+      expiresAt,
+      maxCandidates,
+      subjectWeightage // Array of { subjectId: string, count: number }
+    } = req.body;
+
+    if (!title || !examBodyId || !categoryId || !subjectWeightage || !Array.isArray(subjectWeightage)) {
+      return res.status(400).json({ message: "Invalid exam configuration" });
+    }
+
+    // Verify tutor profile and quota
+    const [profile] = await db.select().from(tutorProfiles).where(eq(tutorProfiles.userId, tutorId)).limit(1);
+    if (!profile || profile.status !== "approved") {
+      return res.status(403).json({ message: "Tutor account not approved" });
+    }
+
+    const totalRequestedQuestions = subjectWeightage.reduce((sum, s) => sum + s.count, 0);
+
+    // Initial exam record
+    const [newExam] = await db
+      .insert(tutorExams)
+      .values({
+        tutorId,
+        examBodyId,
+        categoryId,
+        title,
+        totalQuestions: totalRequestedQuestions,
+        timeLimitMinutes: timeLimitMinutes || 60,
+        expiresAt: new Date(expiresAt),
+        status: "active", // Activate immediately by default for v1
+        maxCandidates: maxCandidates || profile.studentQuota,
+      })
+      .returning();
+
+    // Select and lock questions
+    const lockedQuestions: any[] = [];
+    const weightageRecords: any[] = [];
+
+    for (const sw of subjectWeightage) {
+      const { subjectId, count: qCount } = sw;
+
+      // Get all live questions for this subject
+      const availableQuestions = await db
+        .select()
+        .from(questions)
+        .where(
+          and(
+            eq(questions.subjectId, subjectId),
+            eq(questions.status, "live")
+          )
+        );
+
+      if (availableQuestions.length < qCount) {
+        // Rollback would be better but let's at least error out
+        // Actually for simplicity, we'll just take what's available or error
+        return res.status(400).json({
+          message: `Not enough questions available for subject ID ${subjectId}. Requested ${qCount}, available ${availableQuestions.length}`
+        });
+      }
+
+      // Randomly select N questions
+      const selected = [...availableQuestions]
+        .sort(() => Math.random() - 0.5)
+        .slice(0, qCount);
+
+      selected.forEach(q => {
+        lockedQuestions.push({
+          tutorExamId: newExam.id,
+          questionId: q.id,
+          subjectId: subjectId,
+        });
+      });
+
+      weightageRecords.push({
+        tutorExamId: newExam.id,
+        subjectId,
+        questionCount: qCount,
+      });
+    }
+
+    // Persist locked state
+    await db.transaction(async (tx) => {
+      await tx.insert(tutorExamSubjects).values(weightageRecords);
+      await tx.insert(tutorExamQuestions).values(lockedQuestions);
+    });
+
+    return res.json(newExam);
+  } catch (err: any) {
+    console.error("Error creating tutor exam:", err);
+    return res.status(500).json({ message: "Failed to create exam", error: err.message || String(err) });
+  }
+});
+
+// Get detailed stats for a specific exam
+router.get("/exams/:id/stats", async (req: Request, res: Response) => {
+  try {
+    const tutorId = (req as any).tutorId;
+    const { id } = req.params;
+
+    const [exam] = await db.select().from(tutorExams).where(and(eq(tutorExams.id, id), eq(tutorExams.tutorId, tutorId))).limit(1);
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
+
+    const sessions = await db
+      .select()
+      .from(tutorExamSessions)
+      .where(eq(tutorExamSessions.tutorExamId, id))
+      .orderBy(desc(tutorExamSessions.submittedAt));
+
+    const stats = {
+      total: sessions.length,
+      submitted: sessions.filter(s => s.status === "submitted").length,
+      inProgress: sessions.filter(s => s.status === "in_progress").length,
+      averageScore: sessions.length > 0 ? sessions.reduce((sum, s) => sum + (s.score || 0), 0) / sessions.filter(s => s.status === "submitted").length : 0,
+    };
+
+    return res.json({ exam, sessions, stats });
+  } catch (err: any) {
+    console.error("Error fetching exam stats:", err);
+    return res.status(500).json({ message: "Failed to fetch stats", error: err.message || String(err) });
+  }
+});
+
+
+// Publish results: Update status to 'closed' and generate PDFs
+router.post("/exams/:id/publish-results", async (req: Request, res: Response) => {
+  try {
+    const tutorId = (req as any).tutorId;
+    const { id } = req.params;
+
+    const [exam] = await db
+      .select()
+      .from(tutorExams)
+      .where(and(eq(tutorExams.id, id), eq(tutorExams.tutorId, tutorId)))
+      .limit(1);
+
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
+
+    // Fetch all submitted sessions
+    const sessions = await db
+      .select()
+      .from(tutorExamSessions)
+      .where(eq(tutorExamSessions.tutorExamId, id));
+
+    const submittedSessions = sessions.filter(s => s.status === "submitted");
+
+    if (submittedSessions.length === 0) {
+      return res.status(400).json({ message: "No submitted sessions to publish" });
+    }
+
+    // Generate PDFs
+    const masterLink = await PdfService.generateMasterResultSheet(exam, sessions);
+    const individualLink = await PdfService.generateIndividualSlips(exam, sessions);
+
+    // Update exam status
+    const [updatedExam] = await db
+      .update(tutorExams)
+      .set({ status: "closed" })
+      .where(eq(tutorExams.id, id))
+      .returning();
 
     return res.json({
-      assignmentId,
-      liveAttempts,
-      count: liveAttempts.length,
+      message: "Results published successfully",
+      exam: updatedExam,
+      masterPdf: masterLink,
+      individualPdf: individualLink
     });
   } catch (err: any) {
-    console.error("Error fetching live status:", err);
-    return res.status(500).json({
-      message: "Failed to fetch live status",
-      error: err.message || String(err)
-    });
+    console.error("Error publishing results:", err);
+    return res.status(500).json({ message: "Failed to publish results", error: err.message || String(err) });
   }
 });
 

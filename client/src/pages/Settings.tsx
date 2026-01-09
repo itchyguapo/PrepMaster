@@ -6,10 +6,20 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Bell, User, Shield, Moon, Globe } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { useLocation } from "wouter";
 
 export default function Settings() {
+  const { userRole } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (userRole === "tutor") {
+      setLocation("/tutor/settings");
+    }
+  }, [userRole, setLocation]);
   const { toast } = useToast();
   const [settings, setSettings] = useState({
     notifications: true,

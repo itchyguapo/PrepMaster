@@ -1220,12 +1220,38 @@ router.get("/subjects", async (req: Request, res: Response) => {
   }
 });
 
-// Get all attempts
-router.get("/attempts", async (_req: Request, res: Response) => {
+// Get all attempts for a specific user
+router.get("/attempts", async (req: Request, res: Response) => {
   try {
-    const attemptRecords = await db.select().from(attempts).orderBy(attempts.createdAt);
+    const { supabaseId } = req.query;
+
+    if (!supabaseId) {
+      return res.status(400).json({ message: "supabaseId is required" });
+    }
+
+    // Find the user first to get their internal database ID
+    const userRecords = await db
+      .select()
+      .from(users)
+      .where(eq(users.supabaseId, supabaseId as string))
+      .limit(1);
+
+    if (userRecords.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const user = userRecords[0];
+
+    // Fetch only this user's attempts
+    const attemptRecords = await db
+      .select()
+      .from(attempts)
+      .where(eq(attempts.userId, user.id))
+      .orderBy(desc(attempts.createdAt));
+
     return res.json(attemptRecords);
   } catch (err) {
+    console.error("Error fetching attempts:", err);
     return res.status(500).json({ message: "Failed to fetch attempts", error: String(err) });
   }
 });

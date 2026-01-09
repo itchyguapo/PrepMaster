@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Clock, ChevronLeft, ChevronRight, Flag, Calculator, Grid, AlertCircle, Lock, BookOpen as BookOpenIcon } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -483,80 +484,82 @@ export default function ExamRoom() {
   return (
     <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
       {/* Exam Header */}
-      <header className="bg-white border-b border-border shadow-sm z-20">
-        <div className="max-w-5xl mx-auto w-full px-4 py-3">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-4">
-              <Link href="/" className="flex items-center gap-2 font-display font-bold text-lg text-primary hover:opacity-80 transition-opacity">
-                <BookOpen className="h-5 w-5" />
-                PrepMaster
+      <header className="bg-white border-b border-border shadow-sm z-30 sticky top-0">
+        <div className="max-w-5xl mx-auto w-full px-4 py-2 sm:py-3">
+          <div className="flex items-center justify-between mb-1 sm:mb-2">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <Link href="/" className="flex items-center gap-1.5 font-display font-bold text-base sm:text-lg text-primary hover:opacity-80 transition-opacity">
+                <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="hidden xs:inline">PrepMaster</span>
               </Link>
-              <div className="h-6 w-px bg-border" />
-              <div>
-                <h1 className="font-bold text-lg text-foreground">{examTitle}</h1>
-              </div>
+              <div className="h-4 sm:h-6 w-px bg-border mx-1" />
+              <h1 className="font-bold text-sm sm:text-lg text-foreground truncate max-w-[120px] sm:max-w-none">{examTitle}</h1>
             </div>
-            <div className="flex items-center gap-6 text-sm font-medium text-muted-foreground">
-              <span>Question {currentQIndex + 1} of {questions.length}</span>
-              <span>{Math.round(calculateProgress())}% Complete</span>
+            <div className="flex items-center gap-3 sm:gap-6 text-[10px] sm:text-sm font-medium text-muted-foreground uppercase tracking-tight">
+              <span className="hidden sm:inline">Question {currentQIndex + 1} of {questions.length}</span>
+              <span className="sm:hidden">Q {currentQIndex + 1}/{questions.length}</span>
+              <span>{Math.round(calculateProgress())}%</span>
             </div>
           </div>
 
-          <Progress value={calculateProgress()} className="h-2 mb-4" />
+          <Progress value={calculateProgress()} className="h-1 sm:h-2 mb-2 sm:mb-4" />
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-4">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setCalculatorOpen(true)}
-                className="flex items-center gap-2"
+                className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3 flex items-center gap-2"
+                title="Calculator"
               >
                 <Calculator className="h-4 w-4" />
-                Calculator
+                <span className="hidden sm:inline">Calculator</span>
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setFormulasOpen(true)}
-                className="flex items-center gap-2"
+                className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3 flex items-center gap-2"
+                title="Formulas"
               >
                 <BookOpenIcon className="h-4 w-4" />
-                Formulas
+                <span className="hidden sm:inline">Formulas</span>
               </Button>
             </div>
 
-            <div className="flex-1 max-w-md mx-8 flex items-center gap-3">
-              <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap uppercase tracking-wider">Time Remaining</span>
-              <Progress value={(timeLeft / 3600) * 100} className="h-1.5 flex-1" />
-              <span className="text-sm font-mono font-bold text-primary">{formatTime(timeLeft)}</span>
+            <div className="flex-1 max-w-[100px] sm:max-w-md flex items-center gap-2 sm:gap-3">
+              <span className="hidden sm:inline text-xs font-semibold text-muted-foreground whitespace-nowrap uppercase tracking-wider">Time</span>
+              <Progress value={(timeLeft / 3600) * 100} className="h-1 sm:h-1.5 flex-1" />
+              <span className="text-xs sm:text-sm font-mono font-bold text-primary tabular-nums">{formatTime(timeLeft)}</span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={handleEndExam}
+                className="h-8 px-2 text-xs sm:text-sm"
               >
-                End Exam
+                End
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" disabled={isSubmitting}>
-                    {isSubmitting ? "Submitting..." : "Submit"}
+                  <Button variant="destructive" size="sm" disabled={isSubmitting} className="h-8 px-2 sm:px-4 text-xs sm:text-sm">
+                    {isSubmitting ? "..." : "Submit"}
                   </Button>
                 </AlertDialogTrigger>
-                <AlertDialogContent>
+                <AlertDialogContent className="w-[90vw] max-w-md rounded-lg">
                   <AlertDialogHeader>
                     <AlertDialogTitle>Submit Exam?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      You have answered {Object.keys(answers).length} out of {questions.length} questions. Once you submit, you cannot return to this exam. Are you sure you want to submit?
+                      {Object.keys(answers).length} answered of {questions.length}. No changes allowed after submission.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Review More</AlertDialogCancel>
+                  <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                    <AlertDialogCancel className="mt-0">Review</AlertDialogCancel>
                     <AlertDialogAction onClick={handleSubmit} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                      Yes, Submit Exam
+                      Yes, Submit
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -567,57 +570,76 @@ export default function ExamRoom() {
       </header>
 
       {/* Question Area */}
-      <main className="flex-1 overflow-y-auto p-6 md:p-10 max-w-5xl mx-auto w-full">
-        <div className="mb-8 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              Question {currentQIndex + 1} of {questions.length}
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-10 max-w-5xl mx-auto w-full">
+        <div className="mb-4 sm:mb-8 flex items-center justify-between">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] sm:text-sm font-semibold text-muted-foreground uppercase tracking-widest bg-muted px-2 py-0.5 rounded">
+              Q{currentQIndex + 1} / {questions.length}
             </span>
-            <span className="bg-muted text-muted-foreground text-xs px-2 py-0.5 rounded-full">{currentQuestion.subject}</span>
+            <Badge variant="secondary" className="text-[10px] sm:text-xs font-normal">
+              {currentQuestion.subject}
+            </Badge>
           </div>
-          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-            <Flag className="h-4 w-4 mr-2" /> Report Issue
+          <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground text-xs sm:text-sm">
+            <Flag className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden xs:inline">Report</span>
           </Button>
         </div>
 
-        <Card className="border-2 border-border/60 shadow-sm">
-          <CardContent className="p-6 md:p-10">
-            <p className="text-xl md:text-2xl font-medium leading-relaxed text-foreground mb-8">{currentQuestion.text}</p>
+        <Card className="border sm:border-2 border-border/60 shadow-sm overflow-hidden max-w-4xl mx-auto">
+          <CardContent className="p-4 sm:p-6 md:p-8 lg:p-12">
+            <p className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-medium leading-relaxed text-foreground mb-6 sm:mb-8 text-center sm:text-left">
+              {currentQuestion.text}
+            </p>
             <RadioGroup
               value={answers[currentQuestion.id.toString()] || answers[currentQuestion.id] || ""}
               onValueChange={handleSelectOption}
-              className="space-y-4"
+              className="space-y-3 sm:space-y-4"
             >
               {currentQuestion.options && currentQuestion.options.length > 0 ? (
-                currentQuestion.options.map((option, index) => (
-                  <div
-                    key={option.id}
-                    className={`flex items-center space-x-2 border rounded-xl p-4 transition-all cursor-pointer hover:bg-muted/50 ${(answers[currentQuestion.id.toString()] || answers[currentQuestion.id]) === option.id
-                        ? "border-primary bg-primary/5 ring-1 ring-primary"
-                        : "border-border"
-                      }`}
-                  >
-                    <RadioGroupItem value={option.id} id={`option-${option.id}`} />
-                    <Label htmlFor={`option-${option.id}`} className="flex-1 cursor-pointer font-normal text-lg ml-2">
-                      <span className="font-bold mr-3">
-                        {option.id}. <span className="text-xs text-muted-foreground font-normal">(Press {index + 1})</span>
-                      </span> {option.text}
-                    </Label>
-                  </div>
-                ))
+                currentQuestion.options.map((option, index) => {
+                  const isSelected = (answers[currentQuestion.id.toString()] || answers[currentQuestion.id]) === option.id;
+                  return (
+                    <div
+                      key={option.id}
+                      className={`flex items-center space-x-2 border-2 rounded-xl p-3 sm:p-5 transition-all cursor-pointer hover:bg-muted/30 ${isSelected
+                        ? "border-primary bg-primary/[0.03] ring-1 ring-primary"
+                        : "border-border/50 hover:border-border"
+                        }`}
+                      onClick={() => handleSelectOption(option.id)}
+                    >
+                      <RadioGroupItem value={option.id} id={`option-${option.id}`} className="sr-only" />
+                      <div className={`h-8 w-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 border-2 ${isSelected ? "bg-primary text-white border-primary" : "bg-muted text-muted-foreground border-transparent"
+                        }`}>
+                        {option.id}
+                      </div>
+                      <Label htmlFor={`option-${option.id}`} className="flex-1 cursor-pointer font-normal text-base sm:text-lg ml-2 leading-tight">
+                        {option.text}
+                      </Label>
+                    </div>
+                  );
+                })
               ) : (
-                <p className="text-muted-foreground">No options available for this question.</p>
+                <p className="text-muted-foreground text-center py-8">No options available.</p>
               )}
             </RadioGroup>
           </CardContent>
         </Card>
 
-        <div className="mt-8 flex items-center justify-between">
-          <Button variant="outline" size="lg" onClick={() => setCurrentQIndex((prev) => Math.max(0, prev - 1))} disabled={currentQIndex === 0} className="w-32">
-            <ChevronLeft className="mr-2 h-4 w-4" /> Previous
+        {/* Improved Navigation for Mobile */}
+        <div className="mt-6 sm:mt-8 flex items-center justify-between gap-4 sticky bottom-0 bg-background/80 backdrop-blur-sm py-2 sm:py-0">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => setCurrentQIndex((prev) => Math.max(0, prev - 1))}
+            disabled={currentQIndex === 0}
+            className="flex-1 sm:flex-none sm:w-32 h-11 sm:h-12 border-2"
+          >
+            <ChevronLeft className="mr-1 sm:mr-2 h-4 w-4" />
+            <span className="sm:inline">Prev</span>
           </Button>
 
-          <div className="hidden md:flex gap-2">
+          <div className="hidden md:flex gap-1.5 overflow-x-auto pb-1 max-w-[40%] scrollbar-none">
             {questions.map((q, idx) => {
               const qId = q.id.toString();
               const hasAnswer = answers[qId] || answers[q.id];
@@ -625,24 +647,30 @@ export default function ExamRoom() {
                 <button
                   key={q.id || idx}
                   onClick={() => setCurrentQIndex(idx)}
-                  className={`h-2.5 w-2.5 rounded-full transition-all ${idx === currentQIndex
-                      ? "bg-primary w-6"
-                      : hasAnswer
-                        ? "bg-primary/40"
-                        : "bg-muted-foreground/20"
+                  className={`h-2 w-2 rounded-full shrink-0 transition-all ${idx === currentQIndex
+                    ? "bg-primary w-5"
+                    : hasAnswer
+                      ? "bg-primary/40"
+                      : "bg-muted-foreground/20"
                     }`}
                 />
               );
             })}
           </div>
 
+          {/* Mobile indicator */}
+          <div className="md:hidden text-xs font-bold text-muted-foreground tabular-nums">
+            {currentQIndex + 1} / {questions.length}
+          </div>
+
           <Button
             size="lg"
-            className="bg-primary hover:bg-primary/90 w-32"
+            className="flex-1 sm:flex-none sm:w-32 bg-primary hover:bg-primary/90 h-11 sm:h-12 shadow-md shadow-primary/10"
             onClick={() => setCurrentQIndex((prev) => Math.min(questions.length - 1, prev + 1))}
             disabled={currentQIndex === questions.length - 1}
           >
-            Next <ChevronRight className="ml-2 h-4 w-4" />
+            <span className="sm:inline">{currentQIndex === questions.length - 1 ? "End" : "Next"}</span>
+            <ChevronRight className="ml-1 sm:ml-2 h-4 w-4" />
           </Button>
         </div>
       </main>

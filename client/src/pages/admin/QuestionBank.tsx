@@ -96,6 +96,8 @@ export default function QuestionBank() {
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [isAddSubjectOpen, setIsAddSubjectOpen] = useState(false);
   const [isAddQuestionOpen, setIsAddQuestionOpen] = useState(false);
+  const [isEditQuestionOpen, setIsEditQuestionOpen] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
   const [bulkDeleteConfirmation, setBulkDeleteConfirmation] = useState("");
@@ -800,6 +802,54 @@ export default function QuestionBank() {
       }
     } catch (err) {
       toast({ title: "Error", description: "Failed to add question.", variant: "destructive" });
+    }
+  };
+
+  const handleUpdateQuestion = async () => {
+    if (!editingQuestion || !editingQuestion.q.trim()) {
+      toast({ title: "Error", description: "Question text is required.", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const updateData = {
+        text: editingQuestion.q.trim(),
+        topic: editingQuestion.topic.trim(),
+        status: editingQuestion.status,
+        options: editingQuestion.options,
+        correctAnswer: editingQuestion.correctAnswer
+      };
+
+      const res = await adminFetch(`/api/admin/questions/${editingQuestion.id}`, {
+        method: "PUT",
+        body: JSON.stringify(updateData),
+      });
+
+      if (res.ok) {
+        const updatedQ = await res.json();
+        const mappedQ: Question = {
+          id: updatedQ.id,
+          q: updatedQ.text,
+          examBodyId: updatedQ.examBodyId,
+          categoryId: updatedQ.categoryId || null,
+          subjectId: updatedQ.subjectId,
+          topic: updatedQ.topic || "General",
+          status: updatedQ.status || "live",
+          correctAnswer: updatedQ.correctAnswer || null,
+          options: updatedQ.options || [],
+          createdAt: updatedQ.createdAt || updatedQ.created_at || null
+        };
+
+        setQuestions(questions.map(q => q.id === mappedQ.id ? mappedQ : q));
+        setIsEditQuestionOpen(false);
+        setEditingQuestion(null);
+        toast({ title: "Success", description: "Question updated successfully." });
+      } else {
+        const errorData = await res.json().catch(() => ({ message: "Failed to update question" }));
+        throw new Error(errorData.message || "Failed to update question");
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Failed to update question.", variant: "destructive" });
     }
   };
 
@@ -1716,8 +1766,8 @@ export default function QuestionBank() {
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
                       className={`border-2 border-dashed rounded-lg p-8 transition-colors ${isDragging
-                          ? 'border-primary bg-primary/5'
-                          : 'border-muted-foreground/25 hover:border-primary/50'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-muted-foreground/25 hover:border-primary/50'
                         }`}
                     >
                       <div className="flex flex-col items-center gap-4">
@@ -2308,8 +2358,8 @@ export default function QuestionBank() {
                                 variant="outline"
                                 className="h-7 px-3 text-sm text-blue-600 border-blue-600 hover:bg-blue-50"
                                 onClick={() => {
-                                  // TODO: Implement edit functionality
-                                  toast({ title: "Edit", description: "Edit functionality coming soon" });
+                                  setEditingQuestion(q);
+                                  setIsEditQuestionOpen(true);
                                 }}
                               >
                                 Edit
@@ -2420,6 +2470,79 @@ export default function QuestionBank() {
                 </div>
                 <DialogFooter>
                   <Button onClick={handleAddQuestion}>Add Question</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Edit Question Dialog */}
+            <Dialog open={isEditQuestionOpen} onOpenChange={setIsEditQuestionOpen}>
+              <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                  <DialogTitle>Edit Question</DialogTitle>
+                  <DialogDescription>
+                    Update question details for {selectedSubject.name}
+                  </DialogDescription>
+                </DialogHeader>
+                {editingQuestion && (
+                  <div className="grid gap-4 py-2">
+                    <div>
+                      <Label>Question Text</Label>
+                      <Textarea
+                        value={editingQuestion.q}
+                        onChange={e => setEditingQuestion({ ...editingQuestion, q: e.target.value })}
+                        placeholder="Enter the question text..."
+                        rows={6}
+                      />
+                    </div>
+                    <div>
+                      <Label>Topic</Label>
+                      <Input
+                        placeholder="Topic (e.g., Algebra, Periodic Table)"
+                        value={editingQuestion.topic}
+                        onChange={e => setEditingQuestion({ ...editingQuestion, topic: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Status</Label>
+                        <Select
+                          value={editingQuestion.status}
+                          onValueChange={(val: any) => setEditingQuestion({ ...editingQuestion, status: val })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="live">Live</SelectItem>
+                            <SelectItem value="review">Review</SelectItem>
+                            <SelectItem value="disabled">Disabled</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Correct Answer</Label>
+                        <Select
+                          value={editingQuestion.correctAnswer || ""}
+                          onValueChange={(val: string) => setEditingQuestion({ ...editingQuestion, correctAnswer: val })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {editingQuestion.options?.map((opt: any) => (
+                              <SelectItem key={opt.id} value={opt.id}>
+                                Option {opt.id}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsEditQuestionOpen(false)}>Cancel</Button>
+                  <Button onClick={handleUpdateQuestion}>Save Changes</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
