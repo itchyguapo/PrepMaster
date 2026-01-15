@@ -15,7 +15,8 @@ import {
     Clock,
     AlertCircle,
     Copy,
-    ExternalLink
+    ExternalLink,
+    Shield
 } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
@@ -31,6 +32,7 @@ interface TutorExam {
     maxCandidates: number;
     createdAt: string;
     submissionCount: number;
+    isProctored?: boolean;
 }
 
 export default function TutorExams() {
@@ -121,9 +123,17 @@ export default function TutorExams() {
                                 <Card className="group h-full flex flex-col hover:border-primary/50 transition-all duration-300 hover:shadow-lg rounded-xl">
                                     <CardHeader className="pb-4">
                                         <div className="flex justify-between items-start mb-3">
-                                            <Badge variant="outline" className={`${getStatusColor(exam.status)} border capitalize font-medium px-2.5 py-0.5 rounded-full`}>
-                                                {exam.status}
-                                            </Badge>
+                                            <div className="flex gap-2">
+                                                <Badge variant="outline" className={`${getStatusColor(exam.status)} border capitalize font-medium px-2.5 py-0.5 rounded-full`}>
+                                                    {exam.status}
+                                                </Badge>
+                                                {exam.isProctored && (
+                                                    <Badge variant="outline" className="bg-purple-100 text-purple-700 border-purple-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                        <Shield className="w-3 h-3" />
+                                                        <span className="text-[10px]">PROCTORED</span>
+                                                    </Badge>
+                                                )}
+                                            </div>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"

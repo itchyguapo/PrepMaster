@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useRef, ReactNode } fro
 import { User, Session } from "@supabase/supabase-js";
 import { supabase, getCurrentUser, getSession } from "@/lib/supabase";
 
-type SubscriptionStatus = "basic" | "premium" | "expired";
+type SubscriptionStatus = "basic" | "premium" | "expired" | "unpaid";
 type SubscriptionPlan = "basic" | "standard" | "premium";
 
 interface AuthContextType {
@@ -81,14 +81,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetch(`/api/auth/me?supabaseId=${userId}`),
         fetch(`/api/auth/subscription?userId=${userId}`)
       ]);
-      
+
       if (userResponse.ok) {
         const userData = await userResponse.json();
         setUserRole(userData.role || "student");
       } else {
         setUserRole("student");
       }
-      
+
       if (subscriptionResponse.ok) {
         const data = await subscriptionResponse.json();
         setSubscriptionStatus(data.status || "basic");
@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const currentSession = await getSession();
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
-        
+
         if (currentSession?.user) {
           // Sync user to backend
           await syncUserToBackend(currentSession.user);
@@ -141,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (event, newSession) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
-        
+
         if (newSession?.user) {
           // Sync user to backend
           await syncUserToBackend(newSession.user);

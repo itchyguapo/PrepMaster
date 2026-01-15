@@ -810,6 +810,7 @@ export const tutorExams = pgTable("tutor_exams", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   status: text("status", { enum: examStatusEnum }).notNull().default("draft"),
   maxCandidates: integer("max_candidates").notNull(),
+  isProctored: boolean("is_proctored").default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 

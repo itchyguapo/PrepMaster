@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { Branding } from "@/components/common/Branding";
 import {
   LayoutDashboard,
   BookOpen,
@@ -36,6 +37,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     username: string;
     subscriptionPlan: string;
   } | null>(null);
+
+  // Strict Role Enforcement
+  if (user?.role === 'tutor') {
+    window.location.href = '/tutor';
+    return null;
+  }
 
   // Fetch user data for display
   useEffect(() => {
@@ -113,8 +120,8 @@ export function AppLayout({ children }: AppLayoutProps) {
               key={link.href}
               href={link.href}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${isActive
-                  ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 }`}
             >
               <link.icon className={`h-5 w-5 ${isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary"}`} />
@@ -125,7 +132,9 @@ export function AppLayout({ children }: AppLayoutProps) {
       </div>
 
       {/* Ads removed */}
-
+      <div className="mt-auto p-6 border-t border-border/50">
+        <Branding />
+      </div>
     </div>
   );
 

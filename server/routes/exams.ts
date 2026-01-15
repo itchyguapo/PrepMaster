@@ -40,6 +40,31 @@ router.get("/exam-types", async (req: Request, res: Response) => {
   }
 });
 
+// Get topics from questions for a subject
+router.get("/questions/topics", async (req: Request, res: Response) => {
+  try {
+    const { subjectId } = req.query;
+
+    if (!subjectId) {
+      return res.status(400).json({ message: "subjectId is required" });
+    }
+
+    const topicsList = await db
+      .selectDistinct({ topic: questions.topic })
+      .from(questions)
+      .where(and(
+        eq(questions.subjectId, subjectId as string),
+        eq(questions.status, "live")
+      ))
+      .orderBy(questions.topic);
+
+    return res.json(topicsList.map(t => t.topic).filter(Boolean));
+  } catch (err) {
+    console.error("Error fetching topics:", err);
+    return res.status(500).json({ message: "Failed to fetch topics", error: String(err) });
+  }
+});
+
 // Get categories for an exam body (for practice center dropdowns)
 router.get("/categories", async (req: Request, res: Response) => {
   try {

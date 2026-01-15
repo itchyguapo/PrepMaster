@@ -1,4 +1,5 @@
 import { Navbar } from "@/components/layout/Navbar";
+import { Branding } from "@/components/common/Branding";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -338,9 +339,7 @@ export default function Home() {
             <p className="text-sm text-muted-foreground">
               © {new Date().getFullYear()} PrepMaster. All rights reserved.
             </p>
-            <p className="text-sm font-medium text-primary">
-              Powered by <span className="font-bold">BIG MACHINE ENT</span>
-            </p>
+            <Branding />
           </div>
         </div>
       </footer>

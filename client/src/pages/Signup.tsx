@@ -65,18 +65,13 @@ export default function Signup() {
       if (result.error) {
         setError(result.error.message || "Failed to create account. Please try again.");
       } else {
-        // Check if email confirmation is required
-        // @ts-ignore
-        const user = result.data?.user;
-        if (user && !user.email_confirmed_at) {
-          // Redirect to email confirmation page
-          setLocation("/email-confirmation");
-        } else {
-          setSuccess(true);
-          setTimeout(() => {
-            setLocation("/dashboard");
-          }, 1000); // Reduced from 2000ms to 1000ms
-        }
+        // Account created successfully
+        setSuccess(true);
+        setTimeout(() => {
+          const params = new URLSearchParams(window.location.search);
+          const redirect = params.get("redirect");
+          setLocation(redirect || "/pricing");
+        }, 1000);
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred. Please try again.");
@@ -175,8 +170,8 @@ export default function Signup() {
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">Password strength</span>
                     <span className={`font-medium ${passwordStrength.label === "Weak" ? "text-red-500" :
-                        passwordStrength.label === "Medium" ? "text-yellow-500" :
-                          "text-green-500"
+                      passwordStrength.label === "Medium" ? "text-yellow-500" :
+                        "text-green-500"
                       }`}>
                       {passwordStrength.label}
                     </span>

@@ -135,7 +135,7 @@ export default function CreateAssignment() {
 
   const fetchSubjects = async (examBodyId: string, categoryId: string) => {
     try {
-      const res = await fetch(`/api/admin/subjects?examBodyId=${examBodyId}&categoryId=${categoryId}`);
+      const res = await fetch(`/api/subjects?examBodyId=${examBodyId}&categoryId=${categoryId}`);
       if (res.ok) {
         const data = await res.json();
         setSubjects(data);
@@ -148,15 +148,12 @@ export default function CreateAssignment() {
   const fetchTopics = async () => {
     try {
       const res = await fetch(
-        `/api/admin/questions?examBodyId=${formData.examBodyId}&categoryId=${formData.categoryId}&subjectId=${formData.subjectId}`
+        `/api/questions/topics?subjectId=${formData.subjectId}`
       );
       if (res.ok) {
         const data = await res.json();
-        // Extract unique topics
-        const uniqueTopics = Array.from(
-          new Set(data.map((q: any) => q.topic).filter((t: string) => t))
-        ) as string[];
-        setTopics(uniqueTopics.sort());
+        // data is already unique topics array
+        setTopics(data);
       }
     } catch (err) {
       console.error("Error fetching topics:", err);

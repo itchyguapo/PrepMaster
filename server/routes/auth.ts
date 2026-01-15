@@ -31,7 +31,7 @@ router.get("/subscription", async (req: Request, res: Response) => {
         status: "basic",
         plan: "basic",
         isActive: false,
-        canAccessExams: true, // Basic plan allows exams with daily limit (enforced in exam generation)
+        canAccessExams: false, // Must pay to access exams
         canDownloadOffline: false,
         canAccessTutorMode: false
       });
@@ -72,23 +72,14 @@ router.get("/subscription", async (req: Request, res: Response) => {
         isActive = false;
         plan = "basic";
       }
-    } else {
-      // No active subscription found
-      // For tutors, they might not have a subscription but should still have access
-      // Only create basic subscription for non-tutors
-      if (user.role !== "tutor") {
-        await db.insert(subscriptions).values({
-          userId: user.id,
-          plan: "basic",
-          status: "active",
-        });
-      }
+      isActive = false;
+      plan = "basic";
     }
 
     // Determine access based on subscription
     // basic: exam access with daily limit (1/day), standard: unlimited exam access, premium: unlimited with advanced features
     // Note: Tutor mode is NOT included in student pricing - only available via custom quotes for tutors/schools
-    const canAccessExams = true; // All plans can access exams, but Basic has daily limit enforced in exam generation
+    const canAccessExams = isActive; // Must have an active paid subscription
     const canDownloadOffline = plan === "standard" || plan === "premium"; // Only Standard and Premium can download offline
     // Tutor mode is only for users with role="tutor" (set via custom quotes), NOT for premium students
     const canAccessTutorMode = user.role === "tutor";
@@ -182,12 +173,7 @@ router.post("/sync-user", userSyncLimiter, async (req: Request, res: Response) =
         })
         .returning();
 
-      // Create default basic subscription for new user
-      await db.insert(subscriptions).values({
-        userId: newUser.id,
-        plan: "basic",
-        status: "active",
-      });
+      // Note: No default subscription created. User must choose a plan.
 
       return res.json(newUser);
     }
@@ -264,24 +250,15 @@ router.get("/me", async (req: Request, res: Response) => {
         isActive = false;
         plan = "basic";
       }
-    } else {
-      // Create default basic subscription if none exists
-      // For tutors, they might not have a subscription but should still have access
-      // Only create basic subscription for non-tutors
-      if (user.role !== "tutor") {
-        await db.insert(subscriptions).values({
-          userId: user.id,
-          plan: "basic",
-          status: "active",
-        });
-      }
+      isActive = false;
+      plan = "basic";
     }
 
     // Determine access: basic = exam access with daily limit, standard = unlimited exam access, premium = unlimited with advanced features
     // Note: Tutor mode is NOT available through student pricing - only for users with role="tutor" via custom quotes
-    const subscriptionStatus = isActive && (plan === "standard" || plan === "premium") ? "premium" : "basic";
+    const subscriptionStatus = isActive && (plan === "standard" || plan === "premium") ? "premium" : (isActive ? "basic" : "unpaid");
     const canAccessTutorMode = user.role === "tutor"; // Only tutors (via custom quotes) get tutor mode, not premium students
-    const canAccessExams = true; // All plans can access exams, but Basic has daily limit enforced in exam generation
+    const canAccessExams = isActive; // Must have an active paid subscription
     const canDownloadOffline = plan === "standard" || plan === "premium";
 
     let tutorPlan = null;

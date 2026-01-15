@@ -245,7 +245,7 @@ router.get("/verify/:reference", async (req: Request, res: Response) => {
     }
 
     // Update user subscription status
-    const subscriptionStatus = payment.plan === "premium" ? "premium" : "basic";
+    const subscriptionStatus = (payment.plan === "standard" || payment.plan === "premium") ? "premium" : "basic";
     await db
       .update(users)
       .set({
@@ -429,7 +429,7 @@ async function handlePaymentSuccess(data: any) {
     }
 
     // Update user subscription status
-    const subscriptionStatus = payment.plan === "premium" ? "premium" : "basic";
+    const subscriptionStatus = (payment.plan === "standard" || payment.plan === "premium") ? "premium" : "basic";
     await db
       .update(users)
       .set({

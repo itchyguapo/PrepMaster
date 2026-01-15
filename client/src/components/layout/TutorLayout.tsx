@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { Branding } from "@/components/common/Branding";
 import {
   Plus,
   BarChart,
@@ -37,7 +38,14 @@ export function TutorLayout({ children }: TutorLayoutProps) {
   const [userData, setUserData] = useState<{
     username: string;
     tutorPlan?: string;
+    studentQuota?: number | null;
   } | null>(null);
+
+  // Strict Role Enforcement
+  if (user?.role === 'student' || user?.role === 'user') {
+    window.location.href = '/dashboard';
+    return null;
+  }
 
   // Fetch user data for display
   useEffect(() => {
@@ -119,12 +127,15 @@ export function TutorLayout({ children }: TutorLayoutProps) {
             );
           })}
         </div>
-        <div className="absolute bottom-4 left-4 right-4">
+        <div className="absolute bottom-4 left-4 right-4 space-y-4">
           <Link href="/">
             <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-destructive">
               <LogOut className="mr-2 h-4 w-4" /> Exit Tutor
             </Button>
           </Link>
+          <div className="px-4">
+            <Branding />
+          </div>
         </div>
       </div>
       <main className="flex-1 ml-64 flex flex-col">

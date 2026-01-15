@@ -13,7 +13,7 @@ interface StudentRouteGuardProps {
 }
 
 export function StudentRouteGuard({ children }: StudentRouteGuardProps) {
-  const { user, loading, canAccessTutorMode } = useAuth();
+  const { user, loading, canAccessTutorMode, canAccessExams, userRole } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [checkingRole, setCheckingRole] = useState(true);
@@ -35,7 +35,7 @@ export function StudentRouteGuard({ children }: StudentRouteGuardProps) {
       try {
         const session = await supabase.auth.getSession();
         const token = session.data.session?.access_token;
-        
+
         if (!token) {
           setLocation("/login");
           setCheckingRole(false);
@@ -47,10 +47,10 @@ export function StudentRouteGuard({ children }: StudentRouteGuardProps) {
             Authorization: `Bearer ${token}`,
           },
         });
-        
+
         if (response.ok) {
           const userData = await response.json();
-          
+
           // Check email confirmation
           if (!userData.emailConfirmed && userData.email) {
             setShowAccessDenied(true);
@@ -64,7 +64,7 @@ export function StudentRouteGuard({ children }: StudentRouteGuardProps) {
             }, 3000);
             return;
           }
-          
+
           // Allow access if role is student or not set (default)
           if (!userData.role || userData.role === "student") {
             setIsStudent(true);
@@ -108,6 +108,19 @@ export function StudentRouteGuard({ children }: StudentRouteGuardProps) {
     }
   }, [user, loading, canAccessTutorMode, setLocation, toast]);
 
+  // Lock access if no paid subscription (unless admin)
+  useEffect(() => {
+    if (!loading && !checkingRole && isStudent && userRole !== "admin" && userRole !== "tutor") {
+      if (!canAccessExams) {
+        toast({
+          title: "Plan Required",
+          description: "Please choose a plan to access the dashboard and full exams.",
+        });
+        setLocation("/pricing");
+      }
+    }
+  }, [loading, checkingRole, isStudent, canAccessExams, userRole, setLocation, toast]);
+
   if (loading || checkingRole) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -140,8 +153,8 @@ export function StudentRouteGuard({ children }: StudentRouteGuardProps) {
                 You have a tutor account. Please use the tutor dashboard to manage your students and assignments.
               </AlertDescription>
             </Alert>
-            <Button 
-              onClick={() => setLocation("/tutor")} 
+            <Button
+              onClick={() => setLocation("/tutor")}
               className="w-full"
               variant="default"
             >

@@ -1,11 +1,14 @@
 import { Link } from "wouter";
+import { Branding } from "@/components/common/Branding";
 import { Button } from "@/components/ui/button";
 import { BookOpen, Menu, X, Shield, GraduationCap } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const { user, userRole } = useAuth();
 
   const links = [
     { href: "/features", label: "Features" },
@@ -34,12 +37,19 @@ export function Navbar() {
 
           <div className="h-4 w-[1px] bg-border mx-1" />
 
-          <Link href="/tutor/login" className="text-sm font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-            <GraduationCap className="h-4 w-4" /> Tutor
-          </Link>
-          <Link href="/admin" className="text-sm font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-            <Shield className="h-4 w-4" /> Admin
-          </Link>
+          {/* Advertise Tutor Mode to Visitors, or show Dashboard for Tutors */}
+          {(!user || userRole === "tutor") && (
+            <Link href={userRole === "tutor" ? "/tutor" : "/tutor/login"} className="text-sm font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+              <GraduationCap className="h-4 w-4" /> {userRole === "tutor" ? "Tutor Dashboard" : "For Tutors"}
+            </Link>
+          )}
+
+          {/* Admin Link - Strict Access Only */}
+          {userRole === "admin" && (
+            <Link href="/admin" className="text-sm font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+              <Shield className="h-4 w-4" /> Admin
+            </Link>
+          )}
 
           <div className="h-4 w-[1px] bg-border mx-1" />
 
@@ -72,16 +82,28 @@ export function Navbar() {
                     {link.label}
                   </Link>
                 ))}
-                <Link href="/admin" className="text-lg font-medium hover:text-primary transition-colors flex items-center gap-2" onClick={() => setIsOpen(false)}>
-                  <Shield className="h-4 w-4" /> Admin Portal
-                </Link>
-                <Link href="/tutor/login" className="text-lg font-medium hover:text-primary transition-colors flex items-center gap-2" onClick={() => setIsOpen(false)}>
-                  <GraduationCap className="h-4 w-4" /> Tutor Login
-                </Link>
+                {userRole === "admin" && (
+                  <Link href="/admin" className="text-lg font-medium hover:text-primary transition-colors flex items-center gap-2" onClick={() => setIsOpen(false)}>
+                    <Shield className="h-4 w-4" /> Admin Portal
+                  </Link>
+                )}
+
+                {(!user || userRole === "tutor") && (
+                  <Link href={userRole === "tutor" ? "/tutor" : "/tutor/login"} className="text-lg font-medium hover:text-primary transition-colors flex items-center gap-2" onClick={() => setIsOpen(false)}>
+                    <GraduationCap className="h-4 w-4" /> {userRole === "tutor" ? "Tutor Dashboard" : "For Tutors"}
+                  </Link>
+                )}
               </div>
               <div className="flex flex-col gap-4">
-                <Button variant="outline" className="w-full">Log in</Button>
-                <Button className="w-full">Start Practicing</Button>
+                <Link href="/login" onClick={() => setIsOpen(false)}>
+                  <Button variant="outline" className="w-full">Log in</Button>
+                </Link>
+                <Link href="/signup" onClick={() => setIsOpen(false)}>
+                  <Button className="w-full">Start Practicing</Button>
+                </Link>
+              </div>
+              <div className="mt-auto pt-8 border-t border-border/50">
+                <Branding />
               </div>
             </div>
           </SheetContent>

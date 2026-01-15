@@ -167,7 +167,7 @@ router.post("/exams/:id/start", async (req: Request, res: Response) => {
       .innerJoin(questions, eq(tutorExamQuestions.questionId, questions.id))
       .where(eq(tutorExamQuestions.tutorExamId, id));
 
-    return res.json({ session, questions: lockedQuestions });
+    return res.json({ session, questions: lockedQuestions, exam: exam[0] });
   } catch (err: any) {
     console.error("Error starting exam:", err);
     return res.status(500).json({ message: "Failed to start exam", error: err.message || String(err) });
@@ -1092,7 +1092,8 @@ router.post("/exams", async (req: Request, res: Response) => {
       timeLimitMinutes,
       expiresAt,
       maxCandidates,
-      subjectWeightage // Array of { subjectId: string, count: number }
+      subjectWeightage, // Array of { subjectId: string, count: number }
+      isProctored
     } = req.body;
 
     if (!title || !examBodyId || !categoryId || !subjectWeightage || !Array.isArray(subjectWeightage)) {
@@ -1120,6 +1121,7 @@ router.post("/exams", async (req: Request, res: Response) => {
         expiresAt: new Date(expiresAt),
         status: "active", // Activate immediately by default for v1
         maxCandidates: maxCandidates || profile.studentQuota,
+        isProctored: isProctored || false,
       })
       .returning();
 

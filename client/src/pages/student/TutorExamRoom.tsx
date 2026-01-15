@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
     Clock,
@@ -12,7 +12,9 @@ import {
     Send,
     AlertCircle,
     ShieldCheck,
-    Menu
+    Menu,
+    Shield,
+    AlertTriangle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -30,6 +32,9 @@ export default function TutorExamRoom() {
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [showGrid, setShowGrid] = useState(false);
 
+    // Proctoring State
+    const [violationCount, setViolationCount] = useState(0);
+
     useEffect(() => {
         const raw = sessionStorage.getItem(`exam_session_${id}`);
         if (!raw) {
@@ -39,11 +44,16 @@ export default function TutorExamRoom() {
         const data = JSON.parse(raw);
         setSessionData(data);
 
-        // Timer setup (assuming timeLimitMinutes in data maybe or we use a fixed one)
-        // For v1 we'll set it from session data or default
+        // Timer setup
         setTimeLeft((data.session.timeLimitMinutes || 60) * 60);
+
+        // --- PROCTORING INIT ---
+        if (data.exam?.isProctored) {
+            requestFullScreen();
+        }
     }, [id, setLocation]);
 
+    // Timer Logic
     useEffect(() => {
         if (timeLeft <= 0) return;
         const timer = setInterval(() => {
@@ -59,6 +69,66 @@ export default function TutorExamRoom() {
         return () => clearInterval(timer);
     }, [timeLeft]);
 
+    // --- PROCTORING LOGIC ---
+    useEffect(() => {
+        if (!sessionData?.exam?.isProctored || isSubmitted) return;
+
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                recordViolation();
+            }
+        };
+
+        const handleBlur = () => {
+            recordViolation();
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        window.addEventListener("blur", handleBlur);
+
+        return () => {
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            window.removeEventListener("blur", handleBlur);
+        };
+    }, [sessionData, isSubmitted, violationCount]);
+
+    const requestFullScreen = () => {
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+            elem.requestFullscreen().catch(err => console.log("Full screen denied", err));
+        }
+    };
+
+    const recordViolation = () => {
+        const newCount = violationCount + 1;
+        setViolationCount(newCount);
+
+        if (newCount === 1) {
+            toast({
+                title: "⚠️ FOCUS WARNING",
+                description: "You left the exam window. This has been recorded. Please stay on this tab.",
+                variant: "destructive",
+                duration: 5000,
+            });
+        } else if (newCount === 2) {
+            toast({
+                title: "🚨 FINAL WARNING",
+                description: "This is your LAST warning. If you leave the window again, your exam will be automatically submitted.",
+                variant: "destructive",
+                duration: 8000,
+            });
+        } else if (newCount >= 3) {
+            toast({
+                title: "🛑 VIOLATION LIMIT REACHED",
+                description: "Multiple violations detected. Submitting exam now.",
+                variant: "destructive",
+                duration: 5000,
+            });
+            submitMutation.mutate();
+        }
+    };
+
+
     const submitMutation = useMutation({
         mutationFn: async () => {
             const res = await apiRequest("POST", `/api/tutor/exams/sessions/${sessionData.session.id}/submit`, { responses });
@@ -67,6 +137,9 @@ export default function TutorExamRoom() {
         onSuccess: () => {
             setIsSubmitted(true);
             sessionStorage.removeItem(`exam_session_${id}`);
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(err => console.log("Exit full screen failed", err));
+            }
         },
         onError: (err: any) => {
             toast({ title: "Submission Error", description: err.message, variant: "destructive" });
@@ -112,7 +185,14 @@ export default function TutorExamRoom() {
             <header className="h-20 border-b border-white/5 bg-slate-900/40 backdrop-blur-xl flex items-center justify-between px-6 sticky top-0 z-50">
                 <div className="flex items-center space-x-4">
                     <div className="hidden md:block">
-                        <h1 className="text-lg font-black tracking-tighter text-white">PREPMASTER <span className="text-blue-500 italic">SECURE</span></h1>
+                        <h1 className="text-lg font-black tracking-tighter text-white flex items-center gap-2">
+                            PREPMASTER <span className="text-blue-500 italic">SECURE</span>
+                            {sessionData.exam?.isProctored && (
+                                <span className="inline-flex items-center gap-1 bg-red-500/10 text-red-500 text-[10px] px-2 py-0.5 rounded border border-red-500/20 uppercase tracking-widest">
+                                    <Shield className="w-3 h-3" /> Proctored
+                                </span>
+                            )}
+                        </h1>
                         <p className="text-[10px] text-slate-500 font-mono">CANDIDATE: {sessionData.session.candidateName.toUpperCase()}</p>
                     </div>
                 </div>

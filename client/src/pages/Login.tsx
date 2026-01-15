@@ -27,6 +27,14 @@ export default function Login() {
     if (user && userRole) {
       // Small delay to ensure all data is loaded
       const timer = setTimeout(() => {
+        const params = new URLSearchParams(window.location.search);
+        const redirect = params.get("redirect");
+
+        if (redirect) {
+          setLocation(redirect);
+          return;
+        }
+
         if (userRole === "tutor") {
           setLocation("/tutor/dashboard");
         } else if (userRole === "admin") {

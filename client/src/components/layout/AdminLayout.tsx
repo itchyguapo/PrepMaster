@@ -1,11 +1,12 @@
 import { Link, useLocation } from "wouter";
-import { 
-  LayoutDashboard, 
-  Files, 
-  Users, 
-  Settings, 
-  LogOut, 
-  BarChart, 
+import { Branding } from "@/components/common/Branding";
+import {
+  LayoutDashboard,
+  Files,
+  Users,
+  Settings,
+  LogOut,
+  BarChart,
   CreditCard,
   BookOpen,
   Activity,
@@ -104,14 +105,13 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           {sidebarLinks.map((link) => {
             const isActive = location === link.href;
             return (
-              <Link 
-                key={link.href} 
+              <Link
+                key={link.href}
                 href={link.href}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-md transition-colors ${
-                  isActive 
-                    ? "bg-primary/10 text-primary font-medium" 
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-md transition-colors ${isActive
+                    ? "bg-primary/10 text-primary font-medium"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
+                  }`}
               >
                 <link.icon className="h-4 w-4" />
                 {link.label}
@@ -119,12 +119,15 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             );
           })}
         </div>
-        <div className="absolute bottom-4 left-4 right-4">
+        <div className="absolute bottom-4 left-4 right-4 space-y-4">
           <Link href="/">
             <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-destructive">
               <LogOut className="mr-2 h-4 w-4" /> Exit Admin
             </Button>
           </Link>
+          <div className="px-4">
+            <Branding />
+          </div>
         </div>
       </div>
       <main className="flex-1 ml-64 flex flex-col">
@@ -170,7 +173,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             </DropdownMenu>
           </div>
         </header>
-        
+
         {/* Page Content */}
         <div className="flex-1 p-8">
           <div className="max-w-6xl mx-auto animate-in fade-in duration-500">

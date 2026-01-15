@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
     ArrowLeft,
     Save,
@@ -18,7 +19,8 @@ import {
     Clock,
     Users,
     Info,
-    Calendar
+    Calendar,
+    Shield
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -35,16 +37,17 @@ export default function CreateTutorExam() {
         timeLimitMinutes: 60,
         expiresAt: "",
         maxCandidates: 50,
-        subjectWeightage: [] as { subjectId: string; count: number }[]
+        subjectWeightage: [] as { subjectId: string; count: number }[],
+        isProctored: false,
     });
 
-    const { data: examBodies } = useQuery<any[]>({ queryKey: ["/api/admin/system/exam-bodies"] });
+    const { data: examBodies } = useQuery<any[]>({ queryKey: ["/api/exam-bodies"] });
     const { data: categories } = useQuery<any[]>({
-        queryKey: ["/api/admin/system/categories", formData.examBodyId],
+        queryKey: ["/api/categories", formData.examBodyId],
         enabled: !!formData.examBodyId
     });
     const { data: subjects } = useQuery<any[]>({
-        queryKey: ["/api/admin/system/subjects", formData.categoryId],
+        queryKey: ["/api/subjects", formData.categoryId],
         enabled: !!formData.categoryId
     });
 
@@ -269,6 +272,19 @@ export default function CreateTutorExam() {
                                             value={formData.expiresAt}
                                             onChange={e => setFormData({ ...formData, expiresAt: e.target.value })}
                                             className="h-11 shadow-sm"
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                                        <div className="space-y-0.5">
+                                            <Label className="text-xs uppercase tracking-widest font-bold text-muted-foreground flex items-center gap-1.5">
+                                                <Shield className="w-3.5 h-3.5 text-primary/70" /> Proctoring
+                                            </Label>
+                                            <div className="text-[10px] text-muted-foreground">Restrict tabs/window</div>
+                                        </div>
+                                        <Switch
+                                            checked={formData.isProctored}
+                                            onCheckedChange={checked => setFormData({ ...formData, isProctored: checked })}
                                         />
                                     </div>
                                 </div>

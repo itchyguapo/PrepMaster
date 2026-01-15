@@ -130,12 +130,12 @@ export default function Pricing() {
     const currentPlanLevel = planHierarchy[subscriptionPlan] || 0;
     const selectedPlanLevel = planHierarchy[planId] || 0;
 
-    return currentPlanLevel >= selectedPlanLevel && (subscriptionStatus === "premium" || subscriptionPlan !== "basic");
+    return currentPlanLevel >= selectedPlanLevel && subscriptionStatus !== "unpaid";
   };
 
   // Check if user is on this exact plan
   const isCurrentPlan = (planId: "basic" | "standard" | "premium"): boolean => {
-    return subscriptionPlan === planId;
+    return subscriptionPlan === planId && subscriptionStatus !== "unpaid";
   };
 
   const handlePlanSelect = async (tier: PricingTier) => {
@@ -228,7 +228,7 @@ export default function Pricing() {
       <div className="pt-24 pb-20 container mx-auto px-4">
         <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-12 space-y-3 sm:space-y-4 px-4">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-bold leading-tight">Simple, Transparent Pricing</h1>
-          <p className="text-base sm:text-xl text-muted-foreground">Invest in your trial for less than the cost of a textbook.</p>
+          <p className="text-base sm:text-xl text-muted-foreground">Invest in your success for less than the cost of a textbook.</p>
         </div>
 
         {/* Billing Period Toggle */}
@@ -519,7 +519,7 @@ export default function Pricing() {
             <AccordionItem value="item-3">
               <AccordionTrigger>Is there a free trial?</AccordionTrigger>
               <AccordionContent>
-                Yes! New users get access to our free practice test with 3 questions per subject. This gives you a taste of what PrepMaster offers before subscribing.
+                We offer a free practice demo with 5 questions per subject. This gives you a taste of what PrepMaster offers before subscribing to a full plan.
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="item-4">

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Branding } from "@/components/common/Branding";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,7 +61,7 @@ export default function PracticeTest() {
         // Check for examBodyId in URL
         const params = new URLSearchParams(window.location.search);
         const examBodyIdFromUrl = params.get("examBodyId");
-        
+
         const res = await fetch("/api/exam-bodies");
         if (res.ok) {
           const data = await res.json();
@@ -286,7 +287,7 @@ export default function PracticeTest() {
     if (selectedExamBody) {
       const examBody = examBodies.find((b) => b.id === selectedExamBody);
       const examBodyName = examBody?.name || selectedExamBodyName || "Unknown";
-      
+
       saveAnonymousAttempt({
         id: `anonymous-${Date.now()}`,
         examBodyId: selectedExamBody,
@@ -416,7 +417,7 @@ export default function PracticeTest() {
                   const streak = getAnonymousStreak();
                   const totalQuestions = getAnonymousTotalQuestions();
                   const accuracy = getAnonymousAccuracy();
-                  
+
                   return (
                     <Card className="bg-muted/50">
                       <CardContent className="pt-6">
@@ -554,9 +555,8 @@ export default function PracticeTest() {
               </div>
               <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-1000 ${
-                    timeLeft < 60 ? "bg-red-500" : timeLeft < 120 ? "bg-yellow-500" : "bg-green-500"
-                  }`}
+                  className={`h-full transition-all duration-1000 ${timeLeft < 60 ? "bg-red-500" : timeLeft < 120 ? "bg-yellow-500" : "bg-green-500"
+                    }`}
                   style={{ width: `${(timeLeft / TEST_DURATION) * 100}%` }}
                 />
               </div>
@@ -580,19 +580,17 @@ export default function PracticeTest() {
                     currentQuestion.options.map((option, index) => (
                       <label
                         key={option.id || `option-${index}`}
-                        className={`flex items-center gap-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                          answers[currentQuestion.id] === option.id
-                            ? "bg-primary/10 border-primary shadow-md scale-[1.02]"
-                            : "bg-muted/50 border-border hover:bg-muted hover:border-primary/50 hover:scale-[1.01]"
-                        }`}
+                        className={`flex items-center gap-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${answers[currentQuestion.id] === option.id
+                          ? "bg-primary/10 border-primary shadow-md scale-[1.02]"
+                          : "bg-muted/50 border-border hover:bg-muted hover:border-primary/50 hover:scale-[1.01]"
+                          }`}
                         onClick={() => handleSelectOption(currentQuestion.id, option.id)}
                       >
                         <div
-                          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-base shrink-0 ${
-                            answers[currentQuestion.id] === option.id
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "bg-background border-border"
-                          }`}
+                          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-base shrink-0 ${answers[currentQuestion.id] === option.id
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background border-border"
+                            }`}
                         >
                           {option.id || String.fromCharCode(65 + index)}
                         </div>
@@ -625,13 +623,12 @@ export default function PracticeTest() {
                       <button
                         key={idx}
                         onClick={() => setCurrentQIndex(idx)}
-                        className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${
-                          idx === currentQIndex
-                            ? "bg-primary text-primary-foreground scale-110"
-                            : answers[questions[idx].id]
+                        className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${idx === currentQIndex
+                          ? "bg-primary text-primary-foreground scale-110"
+                          : answers[questions[idx].id]
                             ? "bg-primary/20 text-primary border border-primary/30"
                             : "bg-muted text-muted-foreground hover:bg-muted/80"
-                        }`}
+                          }`}
                       >
                         {idx + 1}
                       </button>
@@ -722,11 +719,10 @@ export default function PracticeTest() {
                         setSelectedExamBodyName(body.name);
                         setError(null);
                       }}
-                      className={`p-6 rounded-lg border-2 transition-all text-left ${
-                        selectedExamBody === body.id
-                          ? "border-primary bg-primary/10 shadow-lg scale-105"
-                          : "border-border bg-card hover:border-primary/50 hover:shadow-md"
-                      }`}
+                      className={`p-6 rounded-lg border-2 transition-all text-left ${selectedExamBody === body.id
+                        ? "border-primary bg-primary/10 shadow-lg scale-105"
+                        : "border-border bg-card hover:border-primary/50 hover:shadow-md"
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-xl font-bold">{body.name}</h3>
@@ -774,6 +770,9 @@ export default function PracticeTest() {
               </div>
             </CardContent>
           </Card>
+          <div className="mt-8 flex justify-center pb-8 border-t border-border/50 pt-6">
+            <Branding />
+          </div>
         </div>
       </div>
     </div>
