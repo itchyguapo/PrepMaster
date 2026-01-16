@@ -1,7 +1,7 @@
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Check, X, Loader2, CheckCircle2, Table2, Grid3x3, Star, Quote } from "lucide-react";
+import { Check, X, Loader2, CheckCircle2, Table2, Grid3x3, Star, Quote, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
@@ -358,6 +358,54 @@ export default function Pricing() {
                 </Card>
               );
             })}
+
+            {/* Tutor & Schools Card */}
+            <Card className="relative flex flex-col w-full max-w-[350px] sm:max-w-none border-primary/20 bg-primary/[0.02]">
+              <CardHeader>
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-5 w-5 text-primary" />
+                  <Badge variant="secondary" className="bg-primary/10 text-primary border-none text-[10px] uppercase font-bold tracking-wider">Institutional</Badge>
+                </div>
+                <CardTitle className="text-2xl font-bold">For Tutors & Schools</CardTitle>
+                <CardDescription>Custom solutions for educational organizations.</CardDescription>
+                <div className="mt-4">
+                  <span className="text-2xl sm:text-3xl font-bold text-primary">Custom Pricing</span>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-1">Based on student volume</p>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1">
+                <ul className="space-y-3">
+                  <li className="flex items-start gap-2 text-sm">
+                    <Check className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                    <span>Multi-student Management</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-sm">
+                    <Check className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                    <span>Group Performance Analytics</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-sm">
+                    <Check className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                    <span>Custom Brand Dashboard</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-sm">
+                    <Check className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                    <span>Bulk Account Licensing</span>
+                  </li>
+                </ul>
+              </CardContent>
+              <CardFooter className="mt-auto">
+                <Button
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-11"
+                  variant="default"
+                  size="lg"
+                  onClick={() => {
+                    document.getElementById('tutor-enquiry')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                >
+                  Make Enquiry
+                </Button>
+              </CardFooter>
+            </Card>
           </div>
         )}
 
@@ -544,7 +592,7 @@ export default function Pricing() {
         </div>
 
         {/* Tutor/School Section */}
-        <div className="mt-20 max-w-4xl mx-auto">
+        <div id="tutor-enquiry" className="mt-20 max-w-4xl mx-auto scroll-mt-24">
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold mb-2">For Tutors & Educational Institutions</h2>
             <p className="text-muted-foreground text-lg">
