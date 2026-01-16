@@ -52,7 +52,7 @@ router.get("/subscription", async (req: Request, res: Response) => {
       .orderBy(desc(subscriptions.createdAt))
       .limit(1);
 
-    let plan = "basic";
+    let plan = "unpaid";
     let isActive = false;
     let expiresAt: Date | null = null;
 
@@ -70,10 +70,8 @@ router.get("/subscription", async (req: Request, res: Response) => {
           .set({ status: "expired" })
           .where(eq(subscriptions.id, subscription.id));
         isActive = false;
-        plan = "basic";
+        plan = "unpaid";
       }
-      isActive = false;
-      plan = "basic";
     }
 
     // Determine access based on subscription
@@ -169,7 +167,7 @@ router.post("/sync-user", userSyncLimiter, async (req: Request, res: Response) =
           username,
           password: "", // No password needed for Supabase auth
           role: isAdmin ? "admin" : "student",
-          subscriptionStatus: "basic",
+          subscriptionStatus: "unpaid",
         })
         .returning();
 
@@ -248,10 +246,8 @@ router.get("/me", async (req: Request, res: Response) => {
           .set({ status: "expired" })
           .where(eq(subscriptions.id, subscription.id));
         isActive = false;
-        plan = "basic";
+        plan = "unpaid";
       }
-      isActive = false;
-      plan = "basic";
     }
 
     // Determine access: basic = exam access with daily limit, standard = unlimited exam access, premium = unlimited with advanced features

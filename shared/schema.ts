@@ -12,7 +12,7 @@ export const users = pgTable("users", {
   supabaseId: varchar("supabase_id").unique(), // Supabase auth user ID
   emailConfirmed: boolean("email_confirmed").default(false), // Email confirmation status
   role: text("role", { enum: ["student", "tutor", "admin"] }).default("student"),
-  subscriptionStatus: text("subscription_status", { enum: ["basic", "standard", "premium", "expired"] }).default("basic"),
+  subscriptionStatus: text("subscription_status", { enum: ["basic", "standard", "premium", "expired", "unpaid"] }).default("unpaid"),
   dailyQuotaUsed: integer("daily_quota_used").default(0),
   lastQuotaReset: timestamp("last_quota_reset", { withTimezone: true }),
   activeGeneratedExams: integer("active_generated_exams").default(0), // Cached count

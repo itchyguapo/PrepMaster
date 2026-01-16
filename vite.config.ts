@@ -7,15 +7,6 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    // Development-only plugins
-    ...(process.env.NODE_ENV !== "production"
-      ? [
-        // Runtime error overlay for development
-        await import("@replit/vite-plugin-runtime-error-modal").then((m) =>
-          m.default()
-        ).catch(() => null),
-      ].filter(Boolean)
-      : []),
   ],
   resolve: {
     alias: {

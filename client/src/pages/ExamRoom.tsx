@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -264,10 +264,45 @@ export default function ExamRoom() {
     return () => clearInterval(timer);
   }, []);
 
-  // Auto-save
+  // Auto-save to local storage (very frequent is fine)
   useEffect(() => {
-    void persistAttempt({ answers, durationSeconds: 3600 - timeLeft });
-  }, [answers, timeLeft, persistAttempt]);
+    const attempt: ExamAttempt = {
+      id: `${examId}-attempt`,
+      examId: examId!,
+      answers,
+      startedAt: Date.now() - (3600 - timeLeft) * 1000,
+      status: "in_progress",
+      durationSeconds: 3600 - timeLeft,
+    };
+    void saveAttempt(attempt);
+  }, [answers, timeLeft, examId]);
+
+  // Sync to backend (less frequent for timer, immediate for answers)
+  const lastSyncedAnswers = useRef<string>("");
+  const lastSyncedTime = useRef<number>(0);
+
+  useEffect(() => {
+    if (!examId || !isOnline()) return;
+
+    const currentAnswersStr = JSON.stringify(answers);
+    const timeElapsed = 3600 - timeLeft;
+    const shouldSyncAnswers = currentAnswersStr !== lastSyncedAnswers.current;
+    const shouldSyncTime = timeElapsed - lastSyncedTime.current >= 30; // Sync time every 30 seconds
+
+    if (shouldSyncAnswers || shouldSyncTime) {
+      const attempt: ExamAttempt = {
+        id: `${examId}-attempt`,
+        examId,
+        answers,
+        startedAt: Date.now() - timeElapsed * 1000,
+        status: "in_progress",
+        durationSeconds: timeElapsed,
+      };
+      enqueueForSync("attempt", attempt);
+      lastSyncedAnswers.current = currentAnswersStr;
+      lastSyncedTime.current = timeElapsed;
+    }
+  }, [answers, timeLeft, examId]);
 
   // Compute current question early so it can be used in effects
   const currentQuestion = questions[currentQIndex];

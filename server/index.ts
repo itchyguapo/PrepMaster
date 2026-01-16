@@ -67,35 +67,48 @@ const allowedOrigins = getAllowedOrigins();
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
-  // Allow requests with no origin (like mobile apps or curl requests)
-  if (!origin) {
-    res.header("Access-Control-Allow-Origin", "*");
-  } else if (allowedOrigins.length === 0) {
-    // If no origins configured in production, deny all
-    if (process.env.NODE_ENV === "production") {
-      console.warn("⚠️  No ALLOWED_ORIGINS configured in production - CORS requests will be denied");
-      return res.status(403).json({ message: "CORS policy: Origin not allowed" });
-    }
-    // Development fallback
-    res.header("Access-Control-Allow-Origin", origin);
-  } else if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-  } else {
-    // Origin not in whitelist
-    if (process.env.NODE_ENV === "production") {
-      return res.status(403).json({ message: "CORS policy: Origin not allowed" });
-    }
-    // In development, allow without logging (reduces noise)
-    res.header("Access-Control-Allow-Origin", origin);
-  }
-
+  // Set standard CORS headers
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
   res.header("Access-Control-Allow-Credentials", "true");
 
+  // If no origin, it's not a CORS request (e.g., direct browser hit or same-origin without header)
+  if (!origin) {
+    return next();
+  }
+
+  // Handle preflight
   if (req.method === "OPTIONS") {
+    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      res.header("Access-Control-Allow-Origin", origin);
+      return res.sendStatus(200);
+    }
+    // In production, be strict with preflight if whitelist exists
+    if (process.env.NODE_ENV === "production" && allowedOrigins.length > 0) {
+      return res.status(403).json({ message: "CORS policy: Origin not allowed" });
+    }
     return res.sendStatus(200);
   }
+
+  // Determine if origin is allowed
+  const isAllowed = allowedOrigins.length === 0 || allowedOrigins.includes(origin);
+
+  if (isAllowed) {
+    res.header("Access-Control-Allow-Origin", origin);
+  } else if (process.env.NODE_ENV === "production") {
+    // In production, only 403 for non-GET requests if not allowed
+    // This prevents breaking script/asset loads that might send an Origin header
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      console.warn(`⚠️ Blocked cross-origin ${req.method} request from: ${origin}`);
+      return res.status(403).json({ message: "CORS policy: Origin not allowed" });
+    }
+    // For GET/HEAD requests not in whitelist, we just don't set the header
+    // The browser will block it if it's truly a cross-origin unauthorized request
+  } else {
+    // Development fallback: allow all origins
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+
   next();
 });
 

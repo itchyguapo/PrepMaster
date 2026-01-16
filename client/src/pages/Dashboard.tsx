@@ -1474,67 +1474,90 @@ export default function Dashboard() {
                         const isDownloaded = offlineExams.some(e => e.examId === exam.id);
 
                         return (
-                          <Card key={exam.id}>
-                            <CardHeader>
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <CardTitle className="text-lg">{exam.title}</CardTitle>
-                                  <CardDescription>{exam.subject} - {exam.subcategory}</CardDescription>
+                          <Card key={exam.id} className="group hover:shadow-xl transition-all duration-300 border-border/50 overflow-hidden bg-gradient-to-b from-card to-card/50">
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate group-hover:text-primary transition-colors">{exam.title}</CardTitle>
+                                  <CardDescription className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mt-1">
+                                    {exam.subject}
+                                    {exam.subject && exam.subcategory && <span className="text-muted-foreground/40">•</span>}
+                                    {exam.subcategory}
+                                  </CardDescription>
                                 </div>
+                                {exam.requiresPremium && (
+                                  <Crown className="h-5 w-5 text-yellow-500 shrink-0" />
+                                )}
                               </div>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                              <div className="flex items-center justify-between">
-                                <Badge variant={exam.status === "completed" ? "secondary" : "default"}>
+                              <div className="flex items-center justify-between gap-3">
+                                <Badge
+                                  variant={exam.status === "completed" ? "secondary" : "default"}
+                                  className={`rounded-md px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase ${exam.status === "in_progress" ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20" : ""
+                                    }`}
+                                >
                                   {exam.status.replace("_", " ").toUpperCase()}
                                 </Badge>
                                 {isDownloaded && (
-                                  <Badge variant="outline" className="gap-1">
-                                    <Download className="h-3 w-3" />
-                                    Downloaded
+                                  <Badge variant="outline" className="gap-1.5 border-green-500/50 text-green-600 bg-green-500/5 rounded-md px-2 py-0.5 text-[10px] font-bold">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    SYNCED
                                   </Badge>
                                 )}
                               </div>
-                              {exam.progress > 0 && <Progress value={exam.progress} />}
-                              {userData?.subscriptionPlan === "basic" && (
-                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-2 text-sm text-blue-800 dark:text-blue-200">
-                                  <Clock className="h-3 w-3 inline mr-1" />
-                                  Basic plan: 1 exam per day limit
+
+                              {exam.progress > 0 && (
+                                <div className="space-y-1.5">
+                                  <div className="flex justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                    <span>Progress</span>
+                                    <span>{exam.progress}%</span>
+                                  </div>
+                                  <Progress value={exam.progress} className="h-1.5 bg-muted/50" />
                                 </div>
                               )}
-                              <div className="flex gap-2">
+
+                              {userData?.subscriptionPlan === "basic" && (
+                                <div className="bg-blue-500/5 dark:bg-blue-400/10 border border-blue-200/50 dark:border-blue-800/50 rounded-lg p-2.5 text-[10px] sm:text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                                  <span className="font-medium">Basic: 1 exam/day limit</span>
+                                </div>
+                              )}
+
+                              <div className="flex gap-2 pt-1">
                                 <Button
                                   onClick={() => isExamMeta(exam) && handleButtonPress(`start-generated-${exam.id}`, () => handleStartExam(exam))}
-                                  className={`flex-1 transition-all duration-200 hover:scale-105 active:scale-95 ${pressedButtons.has(`start-generated-${exam.id}`) ? "scale-95 shadow-inner" : ""
-                                    }`}
-                                  size="sm"
+                                  className={`flex-1 h-10 rounded-xl transition-all duration-300 font-bold text-sm tracking-tight ${exam.status === "in_progress"
+                                    ? "bg-primary hover:shadow-lg hover:shadow-primary/20 active:scale-[0.98]"
+                                    : "bg-primary hover:shadow-lg hover:shadow-primary/20 active:scale-[0.98]"
+                                    } ${pressedButtons.has(`start-generated-${exam.id}`) ? "scale-95" : ""}`}
                                 >
                                   {exam.status === "in_progress" ? (
                                     <>
-                                      <PlayCircle className="h-4 w-4 mr-1" />
+                                      <PlayCircle className="h-4 w-4 mr-2" />
                                       Continue
                                     </>
                                   ) : (
                                     <>
-                                      <PlayCircle className="h-4 w-4 mr-1" />
-                                      Start
+                                      <PlayCircle className="h-4 w-4 mr-2" />
+                                      Start Exam
                                     </>
                                   )}
                                 </Button>
                                 {online && !isDownloaded && (
                                   <Button
                                     variant="outline"
-                                    size="sm"
+                                    size="icon"
                                     onClick={() => handleButtonPress(`download-${exam.id}`, () => downloadExam(exam.id))}
-                                    disabled={downloading === exam.id || !canDownloadExam}
-                                    title={!canDownloadExam ? "Standard or Premium plan required for offline downloads" : ""}
-                                    className={`transition-all duration-200 hover:scale-105 active:scale-95 ${pressedButtons.has(`download-${exam.id}`) ? "scale-95 shadow-inner" : ""
+                                    disabled={downloading === exam.id || (!canDownloadExam && !exam.requiresPremium)}
+                                    className={`h-10 w-10 rounded-xl border-border/60 hover:bg-muted/50 transition-all ${!canDownloadExam ? "opacity-50 cursor-not-allowed" : "hover:text-primary hover:border-primary/50"
                                       }`}
+                                    title={!canDownloadExam ? "Premium required for offline access" : "Download for offline use"}
                                   >
                                     {downloading === exam.id ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
                                     ) : !canDownloadExam ? (
-                                      <Lock className="h-4 w-4" />
+                                      <Lock className="h-4 w-4 text-muted-foreground" />
                                     ) : (
                                       <Download className="h-4 w-4" />
                                     )}
@@ -1560,67 +1583,87 @@ export default function Dashboard() {
                         const isDownloaded = offlineExams.some(e => e.examId === exam.id);
 
                         return (
-                          <Card key={exam.id}>
-                            <CardHeader>
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <CardTitle className="text-lg">{exam.title}</CardTitle>
-                                  <CardDescription>{exam.subject} - {exam.subcategory}</CardDescription>
+                          <Card key={exam.id} className="group hover:shadow-xl transition-all duration-300 border-border/50 overflow-hidden bg-gradient-to-b from-card to-card/50">
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <CardTitle className="text-xl font-bold tracking-tight text-foreground truncate group-hover:text-primary transition-colors">{exam.title}</CardTitle>
+                                  <CardDescription className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mt-1">
+                                    {exam.subject}
+                                    {exam.subject && exam.subcategory && <span className="text-muted-foreground/40">•</span>}
+                                    {exam.subcategory}
+                                  </CardDescription>
                                 </div>
+                                {exam.requiresPremium && (
+                                  <Crown className="h-5 w-5 text-yellow-500 shrink-0" />
+                                )}
                               </div>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                              <div className="flex items-center justify-between">
-                                <Badge variant={exam.status === "completed" ? "secondary" : "default"}>
+                              <div className="flex items-center justify-between gap-3">
+                                <Badge
+                                  variant={exam.status === "completed" ? "secondary" : "default"}
+                                  className={`rounded-md px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase ${exam.status === "in_progress" ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20" : ""
+                                    }`}
+                                >
                                   {exam.status.replace("_", " ").toUpperCase()}
                                 </Badge>
                                 {isDownloaded && (
-                                  <Badge variant="outline" className="gap-1">
-                                    <Download className="h-3 w-3" />
-                                    Downloaded
+                                  <Badge variant="outline" className="gap-1.5 border-green-500/50 text-green-600 bg-green-500/5 rounded-md px-2 py-0.5 text-[10px] font-bold">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    SYNCED
                                   </Badge>
                                 )}
                               </div>
-                              {exam.progress > 0 && <Progress value={exam.progress} />}
-                              {userData?.subscriptionPlan === "basic" && (
-                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-2 text-sm text-blue-800 dark:text-blue-200">
-                                  <Clock className="h-3 w-3 inline mr-1" />
-                                  Basic plan: 1 exam per day limit
+
+                              {exam.progress > 0 && (
+                                <div className="space-y-1.5">
+                                  <div className="flex justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                    <span>Progress</span>
+                                    <span>{exam.progress}%</span>
+                                  </div>
+                                  <Progress value={exam.progress} className="h-1.5 bg-muted/50" />
                                 </div>
                               )}
-                              <div className="flex gap-2">
+
+                              {userData?.subscriptionPlan === "basic" && (
+                                <div className="bg-blue-500/5 dark:bg-blue-400/10 border border-blue-200/50 dark:border-blue-800/50 rounded-lg p-2.5 text-[10px] sm:text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                                  <span className="font-medium">Basic: 1 exam/day limit</span>
+                                </div>
+                              )}
+
+                              <div className="flex gap-2 pt-1">
                                 <Button
                                   onClick={() => isExamMeta(exam) && handleButtonPress(`start-generated-${exam.id}`, () => handleStartExam(exam))}
-                                  className={`flex-1 transition-all duration-200 hover:scale-105 active:scale-95 ${pressedButtons.has(`start-generated-${exam.id}`) ? "scale-95 shadow-inner" : ""
-                                    }`}
-                                  size="sm"
+                                  className={`flex-1 h-10 rounded-xl transition-all duration-300 font-bold text-sm tracking-tight bg-primary hover:shadow-lg hover:shadow-primary/20 active:scale-[0.98] ${pressedButtons.has(`start-generated-${exam.id}`) ? "scale-95" : ""}`}
                                 >
                                   {exam.status === "in_progress" ? (
                                     <>
-                                      <PlayCircle className="h-4 w-4 mr-1" />
+                                      <PlayCircle className="h-4 w-4 mr-2" />
                                       Continue
                                     </>
                                   ) : (
                                     <>
-                                      <PlayCircle className="h-4 w-4 mr-1" />
-                                      Start
+                                      <PlayCircle className="h-4 w-4 mr-2" />
+                                      Start Exam
                                     </>
                                   )}
                                 </Button>
                                 {online && !isDownloaded && (
                                   <Button
                                     variant="outline"
-                                    size="sm"
+                                    size="icon"
                                     onClick={() => handleButtonPress(`download-generated-${exam.id}`, () => downloadExam(exam.id))}
-                                    disabled={downloading === exam.id || !canDownloadExam}
-                                    title={!canDownloadExam ? "Standard or Premium plan required for offline downloads" : ""}
-                                    className={`transition-all duration-200 hover:scale-105 active:scale-95 ${pressedButtons.has(`download-generated-${exam.id}`) ? "scale-95 shadow-inner" : ""
+                                    disabled={downloading === exam.id || (!canDownloadExam && !exam.requiresPremium)}
+                                    className={`h-10 w-10 rounded-xl border-border/60 hover:bg-muted/50 transition-all ${!canDownloadExam ? "opacity-50 cursor-not-allowed" : "hover:text-primary hover:border-primary/50"
                                       }`}
+                                    title={!canDownloadExam ? "Premium required for offline access" : "Download for offline use"}
                                   >
                                     {downloading === exam.id ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
                                     ) : !canDownloadExam ? (
-                                      <Lock className="h-4 w-4" />
+                                      <Lock className="h-4 w-4 text-muted-foreground" />
                                     ) : (
                                       <Download className="h-4 w-4" />
                                     )}

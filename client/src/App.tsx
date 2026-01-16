@@ -70,7 +70,13 @@ function Router() {
           </StudentRouteGuard>
         )}
       </Route>
-      <Route path="/practice-test" component={PracticeTest} />
+      <Route path="/practice-test">
+        {() => (
+          <StudentRouteGuard>
+            <PracticeTest />
+          </StudentRouteGuard>
+        )}
+      </Route>
       <Route path="/analytics">
         {() => (
           <StudentRouteGuard>
@@ -82,9 +88,27 @@ function Router() {
       <Route path="/features" component={Features} />
       <Route path="/resources" component={Resources} />
       <Route path="/resources/:slug" component={ResourceViewer} />
-      <Route path="/exam/:id" component={ExamRoom} />
-      <Route path="/exam/simulation" component={ExamSimulation} />
-      <Route path="/results" component={Results} />
+      <Route path="/exam/:id">
+        {() => (
+          <StudentRouteGuard>
+            <ExamRoom />
+          </StudentRouteGuard>
+        )}
+      </Route>
+      <Route path="/exam/simulation">
+        {() => (
+          <StudentRouteGuard>
+            <ExamSimulation />
+          </StudentRouteGuard>
+        )}
+      </Route>
+      <Route path="/results">
+        {() => (
+          <StudentRouteGuard>
+            <Results />
+          </StudentRouteGuard>
+        )}
+      </Route>
       <Route path="/pricing" component={Pricing} />
 
       {/* Admin Routes - Protected by AdminRouteGuard */}
