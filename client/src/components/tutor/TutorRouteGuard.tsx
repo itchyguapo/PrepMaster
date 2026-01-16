@@ -24,7 +24,7 @@ export function TutorRouteGuard({ children }: TutorRouteGuardProps) {
   useEffect(() => {
     const checkTutorRole = async () => {
       if (!user) {
-        setLocation("/login");
+        setLocation("/login", { replace: true });
         return;
       }
 
@@ -36,9 +36,9 @@ export function TutorRouteGuard({ children }: TutorRouteGuardProps) {
       try {
         const session = await supabase.auth.getSession();
         const token = session.data.session?.access_token;
-        
+
         if (!token) {
-          setLocation("/login");
+          setLocation("/login", { replace: true });
           setCheckingRole(false);
           return;
         }
@@ -48,7 +48,7 @@ export function TutorRouteGuard({ children }: TutorRouteGuardProps) {
             Authorization: `Bearer ${token}`,
           },
         });
-        
+
         if (response.ok) {
           const userData = await response.json();
           // If user has role="tutor", they have access (subscription is optional for tutors)
@@ -138,8 +138,8 @@ export function TutorRouteGuard({ children }: TutorRouteGuardProps) {
                   : "You don't have tutor access. This page is only available for users with tutor role and premium/enterprise subscription."}
               </AlertDescription>
             </Alert>
-            <Button 
-              onClick={() => setLocation("/dashboard")} 
+            <Button
+              onClick={() => setLocation("/dashboard")}
               className="w-full"
               variant="default"
             >

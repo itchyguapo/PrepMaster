@@ -23,7 +23,7 @@ export function StudentRouteGuard({ children }: StudentRouteGuardProps) {
   useEffect(() => {
     const checkStudentRole = async () => {
       if (!user) {
-        setLocation("/login");
+        setLocation("/login", { replace: true });
         return;
       }
 
@@ -37,7 +37,7 @@ export function StudentRouteGuard({ children }: StudentRouteGuardProps) {
         const token = session.data.session?.access_token;
 
         if (!token) {
-          setLocation("/login");
+          setLocation("/login", { replace: true });
           setCheckingRole(false);
           return;
         }
@@ -116,7 +116,7 @@ export function StudentRouteGuard({ children }: StudentRouteGuardProps) {
           title: "Plan Required",
           description: "Please choose a plan to access the dashboard and full exams.",
         });
-        setLocation("/pricing");
+        setLocation("/pricing", { replace: true });
       }
     }
   }, [loading, checkingRole, isStudent, canAccessExams, userRole, setLocation, toast]);

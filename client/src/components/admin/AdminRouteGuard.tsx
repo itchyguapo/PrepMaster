@@ -59,8 +59,8 @@ export function AdminRouteGuard({ children }: AdminRouteGuardProps) {
                 </p>
               </div>
             </div>
-            <Button 
-              onClick={() => setLocation("/")} 
+            <Button
+              onClick={() => setLocation("/", { replace: true })}
               className="w-full"
               variant="default"
             >

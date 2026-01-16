@@ -31,16 +31,16 @@ export default function Login() {
         const redirect = params.get("redirect");
 
         if (redirect) {
-          setLocation(redirect);
+          setLocation(redirect, { replace: true });
           return;
         }
 
         if (userRole === "tutor") {
-          setLocation("/tutor/dashboard");
+          setLocation("/tutor/dashboard", { replace: true });
         } else if (userRole === "admin") {
-          setLocation("/admin");
+          setLocation("/admin", { replace: true });
         } else {
-          setLocation("/dashboard");
+          setLocation("/dashboard", { replace: true });
         }
       }, 300);
       return () => clearTimeout(timer);
