@@ -79,19 +79,27 @@ app.use((req, res, next) => {
 
   // Handle preflight
   if (req.method === "OPTIONS") {
-    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+    // Normalize origins for comparison by removing trailing slashes
+    const normalizedOrigin = origin?.replace(/\/$/, "");
+    const normalizedAllowedOrigins = allowedOrigins.map(o => o.replace(/\/$/, ""));
+
+    if (allowedOrigins.length === 0 || (normalizedOrigin && normalizedAllowedOrigins.includes(normalizedOrigin))) {
       res.header("Access-Control-Allow-Origin", origin);
       return res.sendStatus(200);
     }
+
     // In production, be strict with preflight if whitelist exists
     if (process.env.NODE_ENV === "production" && allowedOrigins.length > 0) {
+      console.warn(`🛑 CORS preflight blocked for origin: ${origin}. Allowed: ${allowedOrigins.join(", ")}`);
       return res.status(403).json({ message: "CORS policy: Origin not allowed" });
     }
     return res.sendStatus(200);
   }
 
-  // Determine if origin is allowed
-  const isAllowed = allowedOrigins.length === 0 || allowedOrigins.includes(origin);
+  // Determine if origin is allowed using normalized comparison
+  const normalizedOrigin = origin?.replace(/\/$/, "");
+  const normalizedAllowedOrigins = allowedOrigins.map(o => o.replace(/\/$/, ""));
+  const isAllowed = allowedOrigins.length === 0 || (normalizedOrigin && normalizedAllowedOrigins.includes(normalizedOrigin));
 
   if (isAllowed) {
     res.header("Access-Control-Allow-Origin", origin);
@@ -99,7 +107,8 @@ app.use((req, res, next) => {
     // In production, only 403 for non-GET requests if not allowed
     // This prevents breaking script/asset loads that might send an Origin header
     if (req.method !== "GET" && req.method !== "HEAD") {
-      console.warn(`⚠️ Blocked cross-origin ${req.method} request from: ${origin}`);
+      log(`⚠️ Blocked cross-origin ${req.method} request from: ${origin}`, "cors");
+      log(`   Allowed origins: ${allowedOrigins.join(", ")}`, "cors");
       return res.status(403).json({ message: "CORS policy: Origin not allowed" });
     }
     // For GET/HEAD requests not in whitelist, we just don't set the header
