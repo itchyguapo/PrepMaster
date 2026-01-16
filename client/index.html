@@ -1,65 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
 
-    <title>PrepMaster NG - WAEC & JAMB CBT Practice</title>
-    <meta name="description" content="Master your WAEC and JAMB exams with our intelligent CBT practice platform. Real questions, instant feedback, and detailed analytics." />
-    <meta name="keywords" content="WAEC, JAMB, CBT, Nigeria, Exam Prep, Practice, Nigerian Students, PrepMaster" />
-    <meta name="author" content="PrepMaster NG" />
-    <link rel="canonical" href="https://prepmaster.ng" />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
 
-    <meta property="og:title" content="PrepMaster NG - WAEC & JAMB CBT Practice" />
-    <meta property="og:description" content="Excel in Your Exams with PrepMaster. Real questions, instant feedback, and detailed analytics." />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://prepmaster.ng" />
-    <meta property="og:image" content="/social-preview.png" />
+  <title>PrepMaster NG - WAEC & JAMB CBT Practice</title>
+  <meta name="description"
+    content="Master your WAEC and JAMB exams with our intelligent CBT practice platform. Real questions, instant feedback, and detailed analytics." />
+  <meta name="keywords" content="WAEC, JAMB, CBT, Nigeria, Exam Prep, Practice, Nigerian Students, PrepMaster" />
+  <meta name="author" content="PrepMaster NG" />
+  <link rel="canonical" href="https://prepmaster.ng" />
 
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="PrepMaster NG - WAEC & JAMB CBT Practice" />
-    <meta name="twitter:description" content="Excel in Your Exams with PrepMaster. Master your WAEC and JAMB exams with our intelligent CBT practice platform." />
-    <meta name="twitter:image" content="/social-preview.png" />
+  <meta property="og:title" content="PrepMaster NG - WAEC & JAMB CBT Practice" />
+  <meta property="og:description"
+    content="Excel in Your Exams with PrepMaster. Real questions, instant feedback, and detailed analytics." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://prepmaster.ng" />
+  <meta property="og:image" content="https://prepmaster.ng/social-preview.png" />
 
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet">
-  </head>
-  <body>
-    <div id="root"></div>
-    <script>
-      // Suppress Chrome extension errors before React loads
-      (function() {
-        // Suppress console errors from Chrome extensions
-        const originalError = console.error;
-        console.error = function(...args) {
-          const message = args[0]?.toString() || '';
-          if (
-            message.includes('Unchecked runtime.lastError') ||
-            message.includes('message port closed') ||
-            message.includes('Could not establish connection') ||
-            message.includes('Receiving end does not exist')
-          ) {
-            return; // Silently ignore extension errors
-          }
-          originalError.apply(console, args);
-        };
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="PrepMaster NG - WAEC & JAMB CBT Practice" />
+  <meta name="twitter:description"
+    content="Excel in Your Exams with PrepMaster. Master your WAEC and JAMB exams with our intelligent CBT practice platform." />
+  <meta name="twitter:image" content="https://prepmaster.ng/social-preview.png" />
 
-        // Suppress unhandled promise rejections from extensions
-        window.addEventListener('unhandledrejection', function(event) {
-          const message = event.reason?.message || String(event.reason || '');
-          if (
-            message.includes('message port closed') ||
-            message.includes('Could not establish connection') ||
-            message.includes('Receiving end does not exist') ||
-            message.includes('runtime.lastError')
-          ) {
-            event.preventDefault();
-          }
-        }, true);
-      })();
-    </script>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Space+Grotesk:wght@300..700&display=swap"
+    rel="stylesheet">
+</head>
+
+<body>
+  <div id="root"></div>
+  <script>
+    // Suppress Chrome extension errors before React loads
+    (function () {
+      // Suppress console errors from Chrome extensions
+      const originalError = console.error;
+      console.error = function (...args) {
+        const message = args[0]?.toString() || '';
+        if (
+          message.includes('Unchecked runtime.lastError') ||
+          message.includes('message port closed') ||
+          message.includes('Could not establish connection') ||
+          message.includes('Receiving end does not exist')
+        ) {
+          return; // Silently ignore extension errors
+        }
+        originalError.apply(console, args);
+      };
+
+      // Suppress unhandled promise rejections from extensions
+      window.addEventListener('unhandledrejection', function (event) {
+        const message = event.reason?.message || String(event.reason || '');
+        if (
+          message.includes('message port closed') ||
+          message.includes('Could not establish connection') ||
+          message.includes('Receiving end does not exist') ||
+          message.includes('runtime.lastError')
+        ) {
+          event.preventDefault();
+        }
+      }, true);
+    })();
+  </script>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>
