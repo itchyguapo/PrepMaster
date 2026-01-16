@@ -141,27 +141,16 @@ export default function Pricing() {
   const handlePlanSelect = async (tier: PricingTier) => {
     if (!user) {
       toast({
-        title: "Login Required",
-        description: "Please log in to subscribe to a plan.",
+        title: "Create Account",
+        description: `Sign up to subscribe to the ${tier.name} plan.`,
         variant: "default",
       });
-      setLocation(`/login?redirect=/pricing&plan=${tier.planId}`);
+      setLocation(`/signup?plan=${tier.planId}`);
       return;
     }
 
-    if (isCurrentOrHigherPlan(tier.planId)) {
-      if (isCurrentPlan(tier.planId)) {
-        toast({
-          title: "Already Subscribed",
-          description: `You're already on the ${tier.name} plan.`,
-        });
-      } else {
-        toast({
-          title: "Higher Plan Active",
-          description: `You're already on a higher plan than ${tier.name}.`,
-        });
-      }
-      return;
+    if (isCurrentPlan(tier.planId)) {
+      return; // UI handles disabled state
     }
 
     setLoading(tier.planId);
@@ -339,19 +328,21 @@ export default function Pricing() {
                       variant={tier.variant as any}
                       size="lg"
                       onClick={() => handlePlanSelect(tier)}
-                      disabled={isDisabled}
+                      disabled={!!isLoading || (!!user && isCurrent)}
                     >
                       {isLoading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Processing...
                         </>
+                      ) : !user ? (
+                        `Choose ${tier.name}`
                       ) : isCurrent ? (
                         "Current Plan"
                       ) : isHigher ? (
-                        "Already Upgraded"
+                        "Included in your plan"
                       ) : (
-                        tier.cta
+                        `Upgrade to ${tier.name}`
                       )}
                     </Button>
                   </CardFooter>
