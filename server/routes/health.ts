@@ -39,5 +39,19 @@ router.get("/health", async (_req: Request, res: Response) => {
   res.status(statusCode).json(health);
 });
 
+/**
+ * CORS Diagnostic endpoint
+ * GET /api/health/cors
+ */
+import { getAllowedOrigins } from "../config/env";
+router.get("/health/cors", (_req: Request, res: Response) => {
+  const allowedOrigins = getAllowedOrigins();
+  res.json({
+    allowedOrigins,
+    nodeEnv: process.env.NODE_ENV || "development",
+    hasAllowedOriginsEnv: !!process.env.ALLOWED_ORIGINS
+  });
+});
+
 export default router;
 

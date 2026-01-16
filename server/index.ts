@@ -82,15 +82,21 @@ app.use((req, res, next) => {
     // Normalize origins for comparison by removing trailing slashes
     const normalizedOrigin = origin?.replace(/\/$/, "");
     const normalizedAllowedOrigins = allowedOrigins.map(o => o.replace(/\/$/, ""));
+    const host = req.headers.host;
+    const protocol = req.protocol;
+    const sameOrigin = normalizedOrigin === `${protocol}://${host}`;
 
-    if (allowedOrigins.length === 0 || (normalizedOrigin && normalizedAllowedOrigins.includes(normalizedOrigin))) {
+    if (allowedOrigins.length === 0 || (normalizedOrigin && normalizedAllowedOrigins.includes(normalizedOrigin)) || sameOrigin) {
+      if (sameOrigin) log(`✅ CORS preflight permitted via same-origin: ${origin}`, "cors");
+      else log(`✅ CORS preflight permitted: ${origin}`, "cors");
+
       res.header("Access-Control-Allow-Origin", origin);
       return res.sendStatus(200);
     }
 
     // In production, be strict with preflight if whitelist exists
     if (process.env.NODE_ENV === "production" && allowedOrigins.length > 0) {
-      console.warn(`🛑 CORS preflight blocked for origin: ${origin}. Allowed: ${allowedOrigins.join(", ")}`);
+      log(`🛑 CORS preflight blocked for origin: ${origin}. Host: ${host}. Allowed: ${allowedOrigins.join(", ")}`, "cors");
       return res.status(403).json({ message: "CORS policy: Origin not allowed" });
     }
     return res.sendStatus(200);
@@ -99,15 +105,28 @@ app.use((req, res, next) => {
   // Determine if origin is allowed using normalized comparison
   const normalizedOrigin = origin?.replace(/\/$/, "");
   const normalizedAllowedOrigins = allowedOrigins.map(o => o.replace(/\/$/, ""));
-  const isAllowed = allowedOrigins.length === 0 || (normalizedOrigin && normalizedAllowedOrigins.includes(normalizedOrigin));
+  const host = req.headers.host;
+  const protocol = req.protocol;
+  const sameOrigin = normalizedOrigin === `${protocol}://${host}`;
+
+  const isAllowed = allowedOrigins.length === 0 ||
+    (normalizedOrigin && normalizedAllowedOrigins.includes(normalizedOrigin)) ||
+    sameOrigin;
 
   if (isAllowed) {
-    res.header("Access-Control-Allow-Origin", origin);
+    if (origin) {
+      res.header("Access-Control-Allow-Origin", origin);
+      // Only log once per session or for non-GET to avoid spam
+      if (req.method !== "GET") {
+        log(`✅ CORS permitted ${req.method}: ${origin} (${sameOrigin ? 'same-origin' : 'whitelist'})`, "cors");
+      }
+    }
   } else if (process.env.NODE_ENV === "production") {
     // In production, only 403 for non-GET requests if not allowed
     // This prevents breaking script/asset loads that might send an Origin header
     if (req.method !== "GET" && req.method !== "HEAD") {
       log(`⚠️ Blocked cross-origin ${req.method} request from: ${origin}`, "cors");
+      log(`   Host header: ${host}`, "cors");
       log(`   Allowed origins: ${allowedOrigins.join(", ")}`, "cors");
       return res.status(403).json({ message: "CORS policy: Origin not allowed" });
     }
@@ -115,7 +134,7 @@ app.use((req, res, next) => {
     // The browser will block it if it's truly a cross-origin unauthorized request
   } else {
     // Development fallback: allow all origins
-    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Access-Control-Allow-Origin", origin || "*");
   }
 
   next();
