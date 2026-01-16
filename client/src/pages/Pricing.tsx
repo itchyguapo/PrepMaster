@@ -273,7 +273,7 @@ export default function Pricing() {
 
         {/* Cards View */}
         {viewMode === "cards" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 max-w-5xl mx-auto mb-16 justify-items-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-6 max-w-7xl mx-auto mb-16 justify-items-center">
             {pricingTiers.map((tier, i) => {
               const isCurrent = isCurrentPlan(tier.planId);
               const isHigher = isCurrentOrHigherPlan(tier.planId);
