@@ -317,6 +317,28 @@ export default function ExamRoom() {
     });
   }, [currentQuestion, timeLeft, persistAttempt]);
 
+  // Sync currentQIndex with URL
+  useEffect(() => {
+    if (!examId || questions.length === 0) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const qParam = params.get("q");
+    if (qParam) {
+      const index = parseInt(qParam) - 1;
+      if (index >= 0 && index < questions.length && index !== currentQIndex) {
+        setCurrentQIndex(index);
+      }
+    }
+  }, [examId, questions.length]);
+
+  const handleSetCurrentQIndex = (index: number) => {
+    setCurrentQIndex(index);
+    const params = new URLSearchParams(window.location.search);
+    params.set("q", (index + 1).toString());
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.pushState({ path: newUrl }, "", newUrl);
+  };
+
   // Keyboard navigation
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -335,9 +357,9 @@ export default function ExamRoom() {
 
       // Arrow keys for navigation
       if (e.key === "ArrowLeft" && currentQIndex > 0) {
-        setCurrentQIndex((prev) => prev - 1);
+        handleSetCurrentQIndex(currentQIndex - 1);
       } else if (e.key === "ArrowRight" && currentQIndex < questions.length - 1) {
-        setCurrentQIndex((prev) => prev + 1);
+        handleSetCurrentQIndex(currentQIndex + 1);
       }
 
       // Escape to show end exam dialog
@@ -666,7 +688,7 @@ export default function ExamRoom() {
           <Button
             variant="outline"
             size="lg"
-            onClick={() => setCurrentQIndex((prev) => Math.max(0, prev - 1))}
+            onClick={() => handleSetCurrentQIndex(Math.max(0, currentQIndex - 1))}
             disabled={currentQIndex === 0}
             className="flex-1 sm:flex-none sm:w-32 h-11 sm:h-12 border-2"
           >
@@ -681,7 +703,7 @@ export default function ExamRoom() {
               return (
                 <button
                   key={q.id || idx}
-                  onClick={() => setCurrentQIndex(idx)}
+                  onClick={() => handleSetCurrentQIndex(idx)}
                   className={`h-2 w-2 rounded-full shrink-0 transition-all ${idx === currentQIndex
                     ? "bg-primary w-5"
                     : hasAnswer
@@ -701,7 +723,7 @@ export default function ExamRoom() {
           <Button
             size="lg"
             className="flex-1 sm:flex-none sm:w-32 bg-primary hover:bg-primary/90 h-11 sm:h-12 shadow-md shadow-primary/10"
-            onClick={() => setCurrentQIndex((prev) => Math.min(questions.length - 1, prev + 1))}
+            onClick={() => handleSetCurrentQIndex(Math.min(questions.length - 1, currentQIndex + 1))}
             disabled={currentQIndex === questions.length - 1}
           >
             <span className="sm:inline">{currentQIndex === questions.length - 1 ? "End" : "Next"}</span>

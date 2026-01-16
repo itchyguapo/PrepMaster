@@ -70,13 +70,7 @@ function Router() {
           </StudentRouteGuard>
         )}
       </Route>
-      <Route path="/practice-test">
-        {() => (
-          <StudentRouteGuard>
-            <PracticeTest />
-          </StudentRouteGuard>
-        )}
-      </Route>
+      <Route path="/practice-test" component={PracticeTest} />
       <Route path="/analytics">
         {() => (
           <StudentRouteGuard>

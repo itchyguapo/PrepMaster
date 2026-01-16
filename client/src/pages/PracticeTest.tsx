@@ -105,6 +105,28 @@ export default function PracticeTest() {
     }
   }, [examStarted, timeLeft, submitted]);
 
+  // Sync currentQIndex with URL
+  useEffect(() => {
+    if (!examStarted || submitted) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const qParam = params.get("q");
+    if (qParam) {
+      const index = parseInt(qParam) - 1;
+      if (index >= 0 && index < questions.length && index !== currentQIndex) {
+        setCurrentQIndex(index);
+      }
+    }
+  }, [examStarted, submitted, questions.length]);
+
+  const handleSetCurrentQIndex = (index: number) => {
+    setCurrentQIndex(index);
+    const params = new URLSearchParams(window.location.search);
+    params.set("q", (index + 1).toString());
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.pushState({ path: newUrl }, "", newUrl);
+  };
+
   // Keyboard shortcuts
   useEffect(() => {
     if (!examStarted || submitted) return;
@@ -127,10 +149,10 @@ export default function PracticeTest() {
 
       // Arrow keys for navigation
       if (e.key === "ArrowLeft" && currentQIndex > 0) {
-        setCurrentQIndex((prev) => prev - 1);
+        handleSetCurrentQIndex(currentQIndex - 1);
       }
       if (e.key === "ArrowRight" && currentQIndex < questions.length - 1) {
-        setCurrentQIndex((prev) => prev + 1);
+        handleSetCurrentQIndex(currentQIndex + 1);
       }
     };
 
@@ -613,7 +635,7 @@ export default function PracticeTest() {
                 <div className="flex justify-between items-center pt-6 border-t">
                   <Button
                     variant="outline"
-                    onClick={() => setCurrentQIndex((prev) => Math.max(0, prev - 1))}
+                    onClick={() => handleSetCurrentQIndex(Math.max(0, currentQIndex - 1))}
                     disabled={currentQIndex === 0}
                   >
                     ← Previous
@@ -622,7 +644,7 @@ export default function PracticeTest() {
                     {questions.map((_, idx) => (
                       <button
                         key={idx}
-                        onClick={() => setCurrentQIndex(idx)}
+                        onClick={() => handleSetCurrentQIndex(idx)}
                         className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${idx === currentQIndex
                           ? "bg-primary text-primary-foreground scale-110"
                           : answers[questions[idx].id]
@@ -640,7 +662,7 @@ export default function PracticeTest() {
                     </Button>
                   ) : (
                     <Button
-                      onClick={() => setCurrentQIndex((prev) => Math.min(questions.length - 1, prev + 1))}
+                      onClick={() => handleSetCurrentQIndex(Math.min(questions.length - 1, currentQIndex + 1))}
                     >
                       Next →
                     </Button>
