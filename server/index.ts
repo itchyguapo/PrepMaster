@@ -79,16 +79,32 @@ app.use((req, res, next) => {
 
   // Handle preflight
   if (req.method === "OPTIONS") {
-    // Normalize origins for comparison by removing trailing slashes
+    // Normalize origins for comparison
     const normalizedOrigin = origin?.replace(/\/$/, "");
     const normalizedAllowedOrigins = allowedOrigins.map(o => o.replace(/\/$/, ""));
-    const host = req.headers.host;
-    const protocol = req.protocol;
-    const sameOrigin = normalizedOrigin === `${protocol}://${host}`;
 
-    if (allowedOrigins.length === 0 || (normalizedOrigin && normalizedAllowedOrigins.includes(normalizedOrigin)) || sameOrigin) {
-      if (sameOrigin) log(`✅ CORS preflight permitted via same-origin: ${origin}`, "cors");
-      else log(`✅ CORS preflight permitted: ${origin}`, "cors");
+    // Extract hostnames for robust same-site check (ignoring protocols)
+    let originHostname = "";
+    try {
+      if (origin) originHostname = new URL(origin).hostname;
+    } catch {
+      originHostname = origin || "";
+    }
+
+    const hostHeader = req.headers.host || "";
+    const [hostHostname] = hostHeader.split(":"); // remove port if present
+
+    const isSameSite = originHostname === hostHostname;
+
+    if (allowedOrigins.length === 0 ||
+      (normalizedOrigin && normalizedAllowedOrigins.includes(normalizedOrigin)) ||
+      isSameSite) {
+
+      if (isSameSite && origin) {
+        log(`✅ CORS preflight permitted via same-site match: ${originHostname}`, "cors");
+      } else if (origin) {
+        log(`✅ CORS preflight permitted via whitelist: ${normalizedOrigin}`, "cors");
+      }
 
       res.header("Access-Control-Allow-Origin", origin);
       return res.sendStatus(200);
@@ -96,44 +112,52 @@ app.use((req, res, next) => {
 
     // In production, be strict with preflight if whitelist exists
     if (process.env.NODE_ENV === "production" && allowedOrigins.length > 0) {
-      log(`🛑 CORS preflight blocked for origin: ${origin}. Host: ${host}. Allowed: ${allowedOrigins.join(", ")}`, "cors");
+      log(`🛑 CORS preflight blocked. Origin: ${origin}, Host: ${hostHeader}. Allowed: ${allowedOrigins.join(", ")}`, "cors");
       return res.status(403).json({ message: "CORS policy: Origin not allowed" });
     }
     return res.sendStatus(200);
   }
 
-  // Determine if origin is allowed using normalized comparison
+  // Determine if origin is allowed using robust comparison
   const normalizedOrigin = origin?.replace(/\/$/, "");
   const normalizedAllowedOrigins = allowedOrigins.map(o => o.replace(/\/$/, ""));
-  const host = req.headers.host;
-  const protocol = req.protocol;
-  const sameOrigin = normalizedOrigin === `${protocol}://${host}`;
+
+  let originHostname = "";
+  try {
+    if (origin) originHostname = new URL(origin).hostname;
+  } catch {
+    originHostname = origin || "";
+  }
+
+  const hostHeader = req.headers.host || "";
+  const [hostHostname] = hostHeader.split(":");
+
+  const isSameSite = !!origin && originHostname === hostHostname;
 
   const isAllowed = allowedOrigins.length === 0 ||
     (normalizedOrigin && normalizedAllowedOrigins.includes(normalizedOrigin)) ||
-    sameOrigin;
+    isSameSite;
 
   if (isAllowed) {
     if (origin) {
       res.header("Access-Control-Allow-Origin", origin);
-      // Only log once per session or for non-GET to avoid spam
+      // Log non-GET requests to verify working flow
       if (req.method !== "GET") {
-        log(`✅ CORS permitted ${req.method}: ${origin} (${sameOrigin ? 'same-origin' : 'whitelist'})`, "cors");
+        log(`✅ CORS permitted ${req.method}: ${origin} (${isSameSite ? 'same-site' : 'whitelist'})`, "cors");
       }
     }
   } else if (process.env.NODE_ENV === "production") {
     // In production, only 403 for non-GET requests if not allowed
-    // This prevents breaking script/asset loads that might send an Origin header
     if (req.method !== "GET" && req.method !== "HEAD") {
       log(`⚠️ Blocked cross-origin ${req.method} request from: ${origin}`, "cors");
-      log(`   Host header: ${host}`, "cors");
+      log(`   Host hostname: ${hostHostname}, Origin hostname: ${originHostname}`, "cors");
       log(`   Allowed origins: ${allowedOrigins.join(", ")}`, "cors");
       return res.status(403).json({ message: "CORS policy: Origin not allowed" });
     }
     // For GET/HEAD requests not in whitelist, we just don't set the header
     // The browser will block it if it's truly a cross-origin unauthorized request
   } else {
-    // Development fallback: allow all origins
+    // Development fallback
     res.header("Access-Control-Allow-Origin", origin || "*");
   }
 
