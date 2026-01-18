@@ -113,8 +113,9 @@ export function StudentRouteGuard({ children }: StudentRouteGuardProps) {
     if (!loading && !checkingRole && isStudent && userRole !== "admin" && userRole !== "tutor") {
       if (!canAccessExams) {
         toast({
-          title: "Plan Required",
-          description: "Please choose a plan to access the dashboard and full exams.",
+          title: "Subscription Required",
+          description: "Please select a plan to complete your sign-up and access the dashboard.",
+          variant: "destructive",
         });
         setLocation("/pricing", { replace: true });
       }

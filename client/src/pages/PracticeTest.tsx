@@ -473,7 +473,7 @@ export default function PracticeTest() {
                       <h3 className="text-2xl font-bold">Sign Up to Save Your Progress</h3>
                     </div>
                     <p className="text-muted-foreground">
-                      Create a free account to sync your progress across devices, unlock unlimited practice tests, detailed explanations, and performance analytics.
+                      Create an account to sync your progress across devices, unlock unlimited practice tests, detailed explanations, and performance analytics.
                     </p>
                   </div>
                   <div className="grid md:grid-cols-3 gap-3 text-sm">
@@ -491,9 +491,9 @@ export default function PracticeTest() {
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-                    <Button onClick={() => setLocation("/signup")} size="lg" className="flex-1 sm:flex-none bg-primary hover:bg-primary/90">
+                    <Button onClick={() => setLocation("/pricing")} size="lg" className="flex-1 sm:flex-none bg-primary hover:bg-primary/90">
                       <UserPlus className="mr-2 h-4 w-4" />
-                      Sign Up for Free
+                      Sign Up
                     </Button>
                     <Button onClick={resetTest} variant="outline" size="lg" className="flex-1 sm:flex-none">
                       Try Another Test

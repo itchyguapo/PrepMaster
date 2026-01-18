@@ -112,6 +112,26 @@ export default function Pricing() {
     ]);
   }, []);
 
+  // Handle auto-payment redirect from signup
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const autoPay = params.get("autoPay");
+    const planId = params.get("plan");
+
+    if (autoPay === "true" && planId && user && !authLoading && pricingTiers.length > 0) {
+      const selectedTier = pricingTiers.find(t => t.planId === planId);
+      if (selectedTier) {
+        // Clear URL params to prevent re-triggering on refresh
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        // Small delay to ensure UI is ready
+        setTimeout(() => {
+          void handlePlanSelect(selectedTier);
+        }, 500);
+      }
+    }
+  }, [user, authLoading, pricingTiers]);
+
   // Get all unique features for comparison table
   const allFeatures = useMemo(() => {
     const featureSet = new Set<string>();

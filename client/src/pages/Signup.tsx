@@ -70,7 +70,13 @@ export default function Signup() {
         setTimeout(() => {
           const params = new URLSearchParams(window.location.search);
           const redirect = params.get("redirect");
-          setLocation(redirect || "/pricing");
+          const plan = params.get("plan");
+
+          if (plan) {
+            setLocation(`/pricing?plan=${plan}&autoPay=true`);
+          } else {
+            setLocation(redirect || "/pricing");
+          }
         }, 1000);
       }
     } catch (err: any) {
@@ -101,7 +107,7 @@ export default function Signup() {
               </div>
               <h2 className="text-2xl font-bold">Account Created!</h2>
               <p className="text-muted-foreground">
-                Redirecting you to your dashboard...
+                Redirecting you to complete your setup...
               </p>
               <div className="pt-4 border-t space-y-2 text-sm text-left">
                 <p className="font-medium text-center mb-3">What's Next?</p>
