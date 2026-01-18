@@ -65,19 +65,18 @@ export default function Signup() {
       if (result.error) {
         setError(result.error.message || "Failed to create account. Please try again.");
       } else {
-        // Account created successfully
+        // Store pending plan in localStorage for after email confirmation
+        const params = new URLSearchParams(window.location.search);
+        const plan = params.get("plan");
+        if (plan) {
+          localStorage.setItem("pendingPlan", plan);
+        }
+
+        // Account created successfully - redirect to email confirmation
         setSuccess(true);
         setTimeout(() => {
-          const params = new URLSearchParams(window.location.search);
-          const redirect = params.get("redirect");
-          const plan = params.get("plan");
-
-          if (plan) {
-            setLocation(`/pricing?plan=${plan}&autoPay=true`);
-          } else {
-            setLocation(redirect || "/pricing");
-          }
-        }, 1000);
+          setLocation("/email-confirmation");
+        }, 1500);
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred. Please try again.");
@@ -107,21 +106,21 @@ export default function Signup() {
               </div>
               <h2 className="text-2xl font-bold">Account Created!</h2>
               <p className="text-muted-foreground">
-                Redirecting you to complete your setup...
+                Please check your email to confirm your account.
               </p>
               <div className="pt-4 border-t space-y-2 text-sm text-left">
                 <p className="font-medium text-center mb-3">What's Next?</p>
                 <div className="flex items-start gap-2">
                   <div className="mt-1 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
-                  <p className="text-muted-foreground">Explore your dashboard and start practicing</p>
+                  <p className="text-muted-foreground">Check your inbox for a confirmation email</p>
                 </div>
                 <div className="flex items-start gap-2">
                   <div className="mt-1 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
-                  <p className="text-muted-foreground">Select your exam body (Basic plan users)</p>
+                  <p className="text-muted-foreground">Click the link in the email to verify your account</p>
                 </div>
                 <div className="flex items-start gap-2">
                   <div className="mt-1 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
-                  <p className="text-muted-foreground">Take your first practice test</p>
+                  <p className="text-muted-foreground">Choose a plan and start practicing!</p>
                 </div>
               </div>
             </div>

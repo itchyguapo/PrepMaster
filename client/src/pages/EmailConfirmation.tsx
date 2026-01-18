@@ -14,6 +14,30 @@ export default function EmailConfirmation() {
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<string | null>(null);
+
+  // Check for pending plan on mount
+  useEffect(() => {
+    const plan = localStorage.getItem("pendingPlan");
+    if (plan) {
+      setPendingPlan(plan);
+    }
+  }, []);
+
+  // Auto-redirect when email is confirmed
+  useEffect(() => {
+    if (confirmed && !loading) {
+      const timer = setTimeout(() => {
+        if (pendingPlan) {
+          localStorage.removeItem("pendingPlan");
+          setLocation(`/pricing?plan=${pendingPlan}&autoPay=true`);
+        } else {
+          setLocation("/dashboard");
+        }
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [confirmed, loading, pendingPlan, setLocation]);
 
   useEffect(() => {
     const checkEmailConfirmation = async () => {
@@ -25,7 +49,7 @@ export default function EmailConfirmation() {
       try {
         // Check Supabase email confirmation status
         const { data: { user: supabaseUser } } = await supabase.auth.getUser();
-        
+
         if (supabaseUser?.email_confirmed_at) {
           // Update our database
           await fetch("/api/auth/confirm-email", {
@@ -68,16 +92,16 @@ export default function EmailConfirmation() {
 
   const handleResendEmail = async () => {
     if (!user?.email) return;
-    
+
     setResending(true);
     setError(null);
-    
+
     try {
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: user.email,
       });
-      
+
       if (error) {
         setError(error.message || "Failed to resend confirmation email");
       }
@@ -85,6 +109,15 @@ export default function EmailConfirmation() {
       setError(err.message || "An error occurred");
     } finally {
       setResending(false);
+    }
+  };
+
+  const handleContinue = () => {
+    if (pendingPlan) {
+      localStorage.removeItem("pendingPlan");
+      setLocation(`/pricing?plan=${pendingPlan}&autoPay=true`);
+    } else {
+      setLocation("/dashboard");
     }
   };
 
@@ -117,7 +150,7 @@ export default function EmailConfirmation() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setLocation("/signup")}
+          onClick={() => setLocation("/")}
           className="absolute left-4 top-4"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -131,15 +164,14 @@ export default function EmailConfirmation() {
             </div>
             <CardTitle className="text-2xl font-bold text-center">Email Confirmed!</CardTitle>
             <CardDescription className="text-center">
-              Your email has been successfully confirmed. You can now access all features.
+              {pendingPlan
+                ? "Your email has been confirmed. Redirecting to complete your subscription..."
+                : "Your email has been confirmed. Redirecting to your dashboard..."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button 
-              className="w-full" 
-              onClick={() => setLocation("/dashboard")}
-            >
-              Go to Dashboard
+            <Button className="w-full" onClick={handleContinue}>
+              {pendingPlan ? "Continue to Payment" : "Go to Dashboard"}
             </Button>
           </CardContent>
         </Card>
@@ -172,7 +204,7 @@ export default function EmailConfirmation() {
         <CardContent className="space-y-4">
           <Alert>
             <AlertDescription>
-              Please check your email and click the confirmation link to verify your account. 
+              Please check your email and click the confirmation link to verify your account.
               You'll need to confirm your email before you can access your dashboard.
               <br /><br />
               <strong>Tips:</strong>
@@ -191,8 +223,8 @@ export default function EmailConfirmation() {
           )}
 
           <div className="space-y-2">
-            <Button 
-              className="w-full" 
+            <Button
+              className="w-full"
               onClick={handleResendEmail}
               disabled={resending}
               variant="outline"
@@ -209,8 +241,8 @@ export default function EmailConfirmation() {
                 </>
               )}
             </Button>
-            <Button 
-              className="w-full" 
+            <Button
+              className="w-full"
               onClick={() => setLocation("/login")}
               variant="ghost"
             >

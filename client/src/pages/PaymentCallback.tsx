@@ -7,8 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 export default function PaymentCallback() {
   const [, setLocation] = useLocation();
-  // @ts-ignore
-  const { refreshAuth } = useAuth();
+  const { refreshSubscription } = useAuth();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState("");
 
@@ -30,14 +29,16 @@ export default function PaymentCallback() {
         if (data.success) {
           setStatus("success");
           setMessage("Payment successful! Your subscription has been activated.");
-          // Refresh auth context to get updated subscription
-          if (refreshAuth) {
-            await refreshAuth();
+
+          // Refresh subscription status in auth context
+          if (refreshSubscription) {
+            await refreshSubscription();
           }
-          // Redirect to dashboard after 3 seconds
+
+          // Give time for the UI to update, then redirect
           setTimeout(() => {
             setLocation("/dashboard");
-          }, 3000);
+          }, 2500);
         } else {
           setStatus("error");
           setMessage(data.message || "Payment verification failed");
@@ -50,7 +51,7 @@ export default function PaymentCallback() {
     };
 
     void verifyPayment();
-  }, [setLocation, refreshAuth]);
+  }, [setLocation, refreshSubscription]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/10 p-4">
