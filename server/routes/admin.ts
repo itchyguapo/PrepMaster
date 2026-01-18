@@ -1472,9 +1472,9 @@ router.get("/stats", async (_req: Request, res: Response) => {
       tutorsChange: Math.round(tutorsChange * 100) / 100,
       subscriptionGrowth,
       recentActivity: recentActivity.map(activity => ({
-        type: activity.type,
-        description: activity.description,
-        timestamp: activity.timestamp.toISOString(),
+        user: activity.user || activity.type,
+        action: activity.description,
+        time: activity.timestamp.toISOString(),
       })),
       pendingInquiries,
     });
@@ -1484,6 +1484,242 @@ router.get("/stats", async (_req: Request, res: Response) => {
       message: "Failed to fetch stats",
       error: err.message || String(err)
     });
+  }
+});
+
+// Finance Overview
+router.get("/finance/overview", async (_req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Current month revenue
+    const currentMonthPayments = await db
+      .select({ total: sql<number>`COALESCE(SUM(amount), 0)` })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.status, "success"),
+          gte(payments.createdAt, currentMonthStart)
+        )
+      );
+    const monthlyRevenue = Number(currentMonthPayments[0]?.total || 0) / 100;
+
+    // Previous month revenue
+    const previousMonthPayments = await db
+      .select({ total: sql<number>`COALESCE(SUM(amount), 0)` })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.status, "success"),
+          gte(payments.createdAt, previousMonthStart),
+          sql`${payments.createdAt} < ${previousMonthEnd}`
+        )
+      );
+    const previousMonthRevenue = Number(previousMonthPayments[0]?.total || 0) / 100;
+
+    const revenueChange = previousMonthRevenue > 0
+      ? ((monthlyRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
+      : (monthlyRevenue > 0 ? 100 : 0);
+
+    // Active subscriptions
+    const activeSubsRecords = await db
+      .select({ count: count() })
+      .from(subscriptions)
+      .where(eq(subscriptions.status, "active"));
+    const totalActiveSubscriptions = Number(activeSubsRecords[0]?.count || 0);
+
+    // Avg Revenue Per User (ARPU)
+    const avgRevenuePerUser = totalActiveSubscriptions > 0 ? monthlyRevenue / totalActiveSubscriptions : 0;
+
+    // Previous ARPU
+    const prevActiveSubsRecords = await db
+      .select({ count: count() })
+      .from(subscriptions)
+      .where(and(
+        eq(subscriptions.status, "active"),
+        sql`${subscriptions.createdAt} < ${previousMonthEnd}`
+      ));
+    const prevActiveSubs = Number(prevActiveSubsRecords[0]?.count || 0);
+    const prevAvgRevenuePerUser = prevActiveSubs > 0 ? previousMonthRevenue / prevActiveSubs : 0;
+
+    const arpuChange = prevAvgRevenuePerUser > 0
+      ? ((avgRevenuePerUser - prevAvgRevenuePerUser) / prevAvgRevenuePerUser) * 100
+      : (avgRevenuePerUser > 0 ? 100 : 0);
+
+    // Revenue data for last 6 months
+    const revenueData = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
+      const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      const monthName = d.toLocaleString('default', { month: 'short' });
+
+      const mRevenue = await db
+        .select({ total: sql<number>`COALESCE(SUM(amount), 0)` })
+        .from(payments)
+        .where(
+          and(
+            eq(payments.status, "success"),
+            gte(payments.createdAt, mStart),
+            sql`${payments.createdAt} < ${mEnd}`
+          )
+        );
+
+      revenueData.push({
+        name: monthName,
+        amount: Number(mRevenue[0]?.total || 0) / 100
+      });
+    }
+
+    return res.json({
+      monthlyRevenue,
+      revenueChange,
+      avgRevenuePerUser,
+      arpuChange,
+      totalActiveSubscriptions,
+      revenueData
+    });
+  } catch (err: any) {
+    console.error("[ADMIN FINANCE] Error fetching overview:", err);
+    return res.status(500).json({ message: "Failed to fetch finance overview", error: err.message });
+  }
+});
+
+// Finance Transactions
+router.get("/finance/transactions", async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 20;
+
+    const txns = await db
+      .select({
+        id: payments.id,
+        user: users.username,
+        plan: payments.plan,
+        amount: payments.amount,
+        status: payments.status,
+        createdAt: payments.createdAt
+      })
+      .from(payments)
+      .leftJoin(users, eq(payments.userId, users.id))
+      .orderBy(desc(payments.createdAt))
+      .limit(limit);
+
+    const formattedTxns = txns.map(t => ({
+      id: t.id,
+      user: t.user || "Unknown User",
+      plan: (t.plan?.charAt(0).toUpperCase() || "") + (t.plan?.slice(1) || ""),
+      amount: new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(t.amount / 100),
+      date: t.createdAt ? new Date(t.createdAt).toLocaleDateString() : "Unknown",
+      status: (t.status?.charAt(0).toUpperCase() || "") + (t.status?.slice(1) || ""),
+      createdAt: t.createdAt
+    }));
+
+    return res.json(formattedTxns);
+  } catch (err: any) {
+    console.error("[ADMIN FINANCE] Error fetching transactions:", err);
+    return res.status(500).json({ message: "Failed to fetch transactions", error: err.message });
+  }
+});
+
+// Finance Export
+router.get("/finance/export", async (req: Request, res: Response) => {
+  try {
+    const format = req.query.format as string || "csv";
+
+    // Fetch all successful payments
+    const allPayments = await db
+      .select({
+        id: payments.id,
+        user: users.username,
+        email: users.email,
+        plan: payments.plan,
+        amount: payments.amount,
+        reference: payments.paystackReference,
+        status: payments.status,
+        createdAt: payments.createdAt
+      })
+      .from(payments)
+      .leftJoin(users, eq(payments.userId, users.id))
+      .where(eq(payments.status, "success"))
+      .orderBy(desc(payments.createdAt));
+
+    if (format === "json") {
+      return res.json(allPayments);
+    }
+
+    // CSV format
+    let csv = "ID,User,Email,Plan,Amount (NGN),Reference,Status,Date\n";
+    allPayments.forEach(p => {
+      csv += `${p.id},"${p.user}","${p.email}",${p.plan},${p.amount / 100},${p.reference},${p.status},${p.createdAt?.toISOString()}\n`;
+    });
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename=finance-export-${new Date().toISOString().split('T')[0]}.csv`);
+    return res.send(csv);
+  } catch (err: any) {
+    console.error("[ADMIN FINANCE] Error exporting data:", err);
+    return res.status(500).json({ message: "Failed to export data", error: err.message });
+  }
+});
+
+// Activity Logs
+router.get("/activity-logs", async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+    const logs = await db
+      .select()
+      .from(activityLogs)
+      .orderBy(desc(activityLogs.timestamp))
+      .limit(limit);
+
+    return res.json(logs);
+  } catch (err: any) {
+    console.error("[ADMIN] Error fetching activity logs:", err);
+    return res.status(500).json({ message: "Failed to fetch activity logs", error: err.message });
+  }
+});
+
+// Tutor Inquiries
+router.get("/tutor-inquiries", async (_req: Request, res: Response) => {
+  try {
+    const inquiries = await db
+      .select()
+      .from(tutorInquiries)
+      .orderBy(desc(tutorInquiries.createdAt));
+
+    return res.json(inquiries);
+  } catch (err: any) {
+    console.error("[ADMIN] Error fetching tutor inquiries:", err);
+    return res.status(500).json({ message: "Failed to fetch tutor inquiries", error: err.message });
+  }
+});
+
+router.put("/tutor-inquiries/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status, notes } = req.body;
+
+    const [updated] = await db
+      .update(tutorInquiries)
+      .set({
+        status,
+        notes,
+        updatedAt: new Date()
+      })
+      .where(eq(tutorInquiries.id, id))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ message: "Inquiry not found" });
+    }
+
+    return res.json(updated);
+  } catch (err: any) {
+    console.error("[ADMIN] Error updating tutor inquiry:", err);
+    return res.status(500).json({ message: "Failed to update inquiry", error: err.message });
   }
 });
 

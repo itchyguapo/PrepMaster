@@ -291,9 +291,13 @@ router.post("/webhook", async (req: Request, res: Response) => {
     }
 
     // Verify webhook signature
+    // Use rawBody for more reliable signature verification (captured in server/index.ts)
+    const rawBody = (req as any).rawBody;
+    const bodyToHash = rawBody ? rawBody : JSON.stringify(req.body);
+
     const hash = crypto
       .createHmac("sha512", webhookSecret)
-      .update(JSON.stringify(req.body))
+      .update(bodyToHash)
       .digest("hex");
 
     const signature = req.headers["x-paystack-signature"] as string;

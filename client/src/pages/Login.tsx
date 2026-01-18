@@ -36,7 +36,7 @@ export default function Login() {
         }
 
         if (userRole === "tutor") {
-          setLocation("/tutor/dashboard", { replace: true });
+          setLocation("/tutor", { replace: true });
         } else if (userRole === "admin") {
           setLocation("/admin", { replace: true });
         } else {

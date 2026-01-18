@@ -1,6 +1,6 @@
 import { db } from "../db";
-import { exams, users } from "@shared/schema";
-import { eq, and, lte, lt, inArray } from "drizzle-orm";
+import { exams, users, subscriptions } from "@shared/schema";
+import { eq, and, lte, lt, inArray, sql } from "drizzle-orm";
 import { TIER_LIMITS } from "./ExamLimitService";
 
 export class CleanupService {
@@ -12,6 +12,7 @@ export class CleanupService {
         try {
             await this.resetDailyQuotas();
             await this.cleanupExpiredExams();
+            await this.monitorSubscriptions();
             console.log("[Cleanup] Cleanup tasks completed.");
         } catch (error) {
             console.error("[Cleanup] Error running cleanup:", error);
@@ -153,6 +154,48 @@ export class CleanupService {
                     );
                 }
             }
+        }
+    }
+
+    /**
+     * Proactively monitor and expire subscriptions
+     */
+    static async monitorSubscriptions() {
+        console.log("[Cleanup] Checking for expired subscriptions...");
+        const now = new Date();
+
+        try {
+            // Find all active subscriptions that have expired
+            const expiredSubs = await db.select()
+                .from(subscriptions)
+                .where(and(
+                    eq(subscriptions.status, "active"),
+                    lte(subscriptions.expiresAt, now),
+                    eq(subscriptions.isLifetime, false)
+                ));
+
+            if (expiredSubs.length > 0) {
+                console.log(`[Cleanup] Found ${expiredSubs.length} expired subscriptions.`);
+
+                for (const sub of expiredSubs) {
+                    // 1. Update subscription status to expired
+                    await db.update(subscriptions)
+                        .set({ status: "expired", updatedAt: now })
+                        .where(eq(subscriptions.id, sub.id));
+
+                    // 2. Update user status to unpaid
+                    await db.update(users)
+                        .set({
+                            subscriptionStatus: "unpaid",
+                            updatedAt: now
+                        })
+                        .where(eq(users.id, sub.userId));
+
+                    console.log(`[Cleanup] Expired subscription for user ID: ${sub.userId}`);
+                }
+            }
+        } catch (error) {
+            console.error("[Cleanup] Error monitoring subscriptions:", error);
         }
     }
 }

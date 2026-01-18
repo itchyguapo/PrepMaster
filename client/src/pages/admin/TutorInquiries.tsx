@@ -43,7 +43,7 @@ export default function TutorInquiries() {
   const fetchInquiries = async () => {
     setLoading(true);
     try {
-      const res = await adminFetch("/tutor-inquiries");
+      const res = await adminFetch("/api/admin/tutor-inquiries");
       const data = await res.json();
       setInquiries(data || []);
     } catch (error) {
@@ -60,7 +60,7 @@ export default function TutorInquiries() {
 
   const handleStatusUpdate = async (inquiryId: string, status: string, notes?: string) => {
     try {
-      const res = await adminFetch(`/tutor-inquiries/${inquiryId}`, {
+      const res = await adminFetch(`/api/admin/tutor-inquiries/${inquiryId}`, {
         method: "PUT",
         body: JSON.stringify({ status, notes }),
       });

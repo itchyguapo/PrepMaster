@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Clock, ChevronLeft, ChevronRight, Flag, Calculator, Grid, AlertCircle, Lock, BookOpen as BookOpenIcon } from "lucide-react";
+import { Clock, ChevronLeft, ChevronRight, Flag, Calculator, Grid, AlertCircle, CheckCircle2, Lock, BookOpen as BookOpenIcon, WifiOff } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
@@ -39,10 +39,12 @@ export default function ExamRoom() {
   const [exitDialogOpen, setExitDialogOpen] = useState(false);
   const [canAccessExam, setCanAccessExam] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
+  const [syncStatus, setSyncStatus] = useState<"synced" | "syncing" | "error" | "offline">(isOnline() ? "synced" : "offline");
   const [calculatorOpen, setCalculatorOpen] = useState(false);
   const [formulasOpen, setFormulasOpen] = useState(false);
   const [showTutorial, setShowTutorial] = useState(true);
   const [showEndExamDialog, setShowEndExamDialog] = useState(false);
+  const [loadedFromOffline, setLoadedFromOffline] = useState(false);
 
   const [examId, setExamId] = useState<string | null>(null);
   const [examTitle, setExamTitle] = useState<string>("Exam");
@@ -119,6 +121,7 @@ export default function ExamRoom() {
       if (offlineExam && offlineExam.questions) {
         setQuestions(offlineExam.questions);
         setExamTitle(offlineExam.title || "Exam");
+        setLoadedFromOffline(true);
         setLoading(false);
         return;
       }
@@ -277,31 +280,71 @@ export default function ExamRoom() {
     void saveAttempt(attempt);
   }, [answers, timeLeft, examId]);
 
-  // Sync to backend (less frequent for timer, immediate for answers)
+  // Sync to backend (debounced for answers, periodic for timer)
   const lastSyncedAnswers = useRef<string>("");
   const lastSyncedTime = useRef<number>(0);
+  const syncDebounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!examId || !isOnline()) return;
 
     const currentAnswersStr = JSON.stringify(answers);
     const timeElapsed = 3600 - timeLeft;
-    const shouldSyncAnswers = currentAnswersStr !== lastSyncedAnswers.current;
-    const shouldSyncTime = timeElapsed - lastSyncedTime.current >= 30; // Sync time every 30 seconds
 
-    if (shouldSyncAnswers || shouldSyncTime) {
+    // 1. Check for answer changes
+    const hasAnswerChanges = currentAnswersStr !== lastSyncedAnswers.current;
+
+    // 2. Check for time changes (every 30 seconds)
+    const shouldSyncTime = timeElapsed - lastSyncedTime.current >= 30;
+
+    const syncAttempt = async (isFinal = false) => {
+      setSyncStatus("syncing");
       const attempt: ExamAttempt = {
         id: `${examId}-attempt`,
         examId,
         answers,
-        startedAt: Date.now() - timeElapsed * 1000,
-        status: "in_progress",
-        durationSeconds: timeElapsed,
+        startedAt: Date.now() - (3600 - timeLeft) * 1000,
+        status: isFinal ? "completed" : "in_progress",
+        durationSeconds: 3600 - timeLeft,
       };
-      enqueueForSync("attempt", attempt);
+
+      try {
+        await enqueueForSync("attempt", attempt);
+        setSyncStatus("synced");
+      } catch (err) {
+        console.error("Sync error:", err);
+        setSyncStatus("error");
+      }
+
       lastSyncedAnswers.current = currentAnswersStr;
-      lastSyncedTime.current = timeElapsed;
+      lastSyncedTime.current = 3600 - timeLeft;
+
+      if (syncDebounceTimer.current) {
+        clearTimeout(syncDebounceTimer.current);
+        syncDebounceTimer.current = null;
+      }
+    };
+
+    // Handle answer sync with debouncing
+    if (hasAnswerChanges) {
+      if (syncDebounceTimer.current) {
+        clearTimeout(syncDebounceTimer.current);
+      }
+      syncDebounceTimer.current = setTimeout(() => {
+        syncAttempt();
+      }, 5000); // Debounce answers for 5 seconds
     }
+
+    // Handle time sync periodically
+    if (shouldSyncTime && !hasAnswerChanges) {
+      syncAttempt();
+    }
+
+    return () => {
+      if (syncDebounceTimer.current) {
+        clearTimeout(syncDebounceTimer.current);
+      }
+    };
   }, [answers, timeLeft, examId]);
 
   // Compute current question early so it can be used in effects
@@ -563,6 +606,32 @@ export default function ExamRoom() {
 
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 sm:gap-4">
+              <div className="flex items-center gap-2 px-2 py-1 rounded bg-muted/50 border border-border">
+                {syncStatus === "syncing" && (
+                  <>
+                    <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                    <span className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase">Syncing...</span>
+                  </>
+                )}
+                {syncStatus === "synced" && (
+                  <>
+                    <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
+                    <span className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase">Saved</span>
+                  </>
+                )}
+                {syncStatus === "error" && (
+                  <>
+                    <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
+                    <span className="text-[10px] sm:text-xs font-medium text-red-500 uppercase">Sync Error</span>
+                  </>
+                )}
+                {syncStatus === "offline" && (
+                  <>
+                    <div className="h-2 w-2 rounded-full bg-gray-400" />
+                    <span className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase">Offline (Saved locally)</span>
+                  </>
+                )}
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -628,6 +697,20 @@ export default function ExamRoom() {
 
       {/* Question Area */}
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-10 max-w-5xl mx-auto w-full">
+        {loadedFromOffline && (
+          <div className="mb-6 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-full bg-blue-500/20 flex items-center justify-center">
+                <WifiOff className="h-4 w-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-blue-900 leading-none">Offline Mode Active</p>
+                <p className="text-xs text-blue-700 mt-1">You are practicing with questions saved on this device. Progress will sync when you're back online.</p>
+              </div>
+            </div>
+            <Badge variant="outline" className="bg-blue-500/10 border-blue-500/30 text-blue-700">PREMIUM FEATURE</Badge>
+          </div>
+        )}
         <div className="mb-4 sm:mb-8 flex items-center justify-between">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] sm:text-sm font-semibold text-muted-foreground uppercase tracking-widest bg-muted px-2 py-0.5 rounded">

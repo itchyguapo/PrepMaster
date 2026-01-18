@@ -1401,19 +1401,46 @@ export default function Dashboard() {
                               </div>
                             </CardHeader>
                             <CardContent className="py-3 pt-0">
-                              <div className="flex justify-between items-center text-xs text-muted-foreground mb-4">
+                              <div className="flex items-center justify-between text-xs text-muted-foreground mb-4">
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3 w-3" />
                                   Due: {assignment.dueDate ? new Date(assignment.dueDate).toLocaleDateString() : "No date"}
                                 </span>
+                                {offlineExams.some(e => e.examId === assignment.examId) && (
+                                  <Badge variant="outline" className="gap-1 border-green-500/50 text-green-600 bg-green-500/5 text-[10px] font-bold">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    SYNCED
+                                  </Badge>
+                                )}
                               </div>
-                              <Button
-                                size="sm"
-                                className="w-full"
-                                onClick={() => setLocation(`/exam/${assignment.examId}`)}
-                              >
-                                Take Assignment
-                              </Button>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  className="flex-1"
+                                  onClick={() => setLocation(`/exam/${assignment.examId}`)}
+                                >
+                                  Take Assignment
+                                </Button>
+                                {online && !offlineExams.some(e => e.examId === assignment.examId) && (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleButtonPress(`download-assignment-${assignment.id}`, () => downloadExam(assignment.examId))}
+                                    disabled={downloading === assignment.examId || !canDownload()}
+                                    className={`h-9 w-9 rounded-md border-border/60 hover:bg-muted/50 transition-all ${!canDownload() ? "opacity-50 cursor-not-allowed" : "hover:text-primary hover:border-primary/50"
+                                      }`}
+                                    title={!canDownload() ? "Premium required for offline access" : "Download for offline use"}
+                                  >
+                                    {downloading === assignment.examId ? (
+                                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                    ) : !canDownload() ? (
+                                      <Lock className="h-4 w-4 text-muted-foreground" />
+                                    ) : (
+                                      <Download className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
                             </CardContent>
                           </Card>
                         ))}
