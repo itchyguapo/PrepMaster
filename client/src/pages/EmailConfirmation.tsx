@@ -114,7 +114,11 @@ export default function EmailConfirmation() {
   }, [user, authLoading, setLocation]);
 
   const handleResendEmail = async () => {
-    if (!user?.email) return;
+    const emailToUse = user?.email || pendingEmail;
+    if (!emailToUse) {
+      setError("No email address available. Please try signing up again.");
+      return;
+    }
 
     setResending(true);
     setError(null);
@@ -122,7 +126,7 @@ export default function EmailConfirmation() {
     try {
       const { error } = await supabase.auth.resend({
         type: "signup",
-        email: user.email,
+        email: emailToUse,
       });
 
       if (error) {

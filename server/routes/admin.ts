@@ -26,7 +26,7 @@ import {
   activityLogs,
   tutorProfiles
 } from "@shared/schema";
-import { eq, and, inArray, sql, count, gte, desc, or, ilike } from "drizzle-orm";
+import { eq, and, inArray, sql, count, gte, desc, or, ilike, gt, isNull } from "drizzle-orm";
 import { requireAdmin } from "../middleware/adminAuth";
 import { formatQuestionOptions } from "../utils/questionFormatter";
 import { adminLimiter } from "../middleware/rateLimiter";
@@ -1193,7 +1193,15 @@ router.get("/stats", async (_req: Request, res: Response) => {
     const activeSubsRecords = await db
       .select({ count: count() })
       .from(subscriptions)
-      .where(eq(subscriptions.status, "active"));
+      .where(
+        and(
+          eq(subscriptions.status, "active"),
+          or(
+            isNull(subscriptions.expiresAt),
+            gt(subscriptions.expiresAt, new Date())
+          )
+        )
+      );
     const activeSubscriptions = activeSubsRecords[0]?.count || 0;
 
     // Get questions count
@@ -1305,7 +1313,11 @@ router.get("/stats", async (_req: Request, res: Response) => {
           and(
             eq(subscriptions.status, "active"),
             gte(subscriptions.createdAt, currentMonthStart),
-            sql`${subscriptions.createdAt} < ${currentMonthEnd}`
+            sql`${subscriptions.createdAt} < ${currentMonthEnd}`,
+            or(
+              isNull(subscriptions.expiresAt),
+              gt(subscriptions.expiresAt, new Date())
+            )
           )
         );
       currentMonthSubs = currentMonthSubsRecords[0]?.count || 0;
@@ -1318,6 +1330,7 @@ router.get("/stats", async (_req: Request, res: Response) => {
             eq(subscriptions.status, "active"),
             gte(subscriptions.createdAt, previousMonthStart),
             sql`${subscriptions.createdAt} < ${previousMonthEnd}`
+            // Note: For historical comparison, we just check status as expiration logic is time-relative
           )
         );
       previousMonthSubs = previousMonthSubsRecords[0]?.count || 0;
@@ -1528,7 +1541,15 @@ router.get("/finance/overview", async (_req: Request, res: Response) => {
     const activeSubsRecords = await db
       .select({ count: count() })
       .from(subscriptions)
-      .where(eq(subscriptions.status, "active"));
+      .where(
+        and(
+          eq(subscriptions.status, "active"),
+          or(
+            isNull(subscriptions.expiresAt),
+            gt(subscriptions.expiresAt, new Date())
+          )
+        )
+      );
     const totalActiveSubscriptions = Number(activeSubsRecords[0]?.count || 0);
 
     // Avg Revenue Per User (ARPU)
@@ -1739,7 +1760,11 @@ router.get("/users", async (_req: Request, res: Response) => {
           .where(
             and(
               eq(subscriptions.userId, u.id),
-              eq(subscriptions.status, "active")
+              eq(subscriptions.status, "active"),
+              or(
+                isNull(subscriptions.expiresAt),
+                gt(subscriptions.expiresAt, new Date())
+              )
             )
           )
           .orderBy(desc(subscriptions.createdAt))
