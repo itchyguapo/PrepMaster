@@ -9,6 +9,45 @@ import { ExamLimitService } from "../services/ExamLimitService";
 
 const router = Router();
 
+// Delete (archive) an exam
+router.delete("/exams/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { supabaseId } = req.query;
+
+    if (!id || !supabaseId) {
+      return res.status(400).json({ message: "Exam ID and supabaseId are required" });
+    }
+
+    // Find user
+    const userRecords = await db
+      .select()
+      .from(users)
+      .where(eq(users.supabaseId, supabaseId as string))
+      .limit(1);
+
+    if (userRecords.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Archive the exam (Drizzle update)
+    const [updated] = await db
+      .update(exams)
+      .set({ status: "archived", updatedAt: new Date() })
+      .where(and(eq(exams.id, id), eq(exams.createdBy, userRecords[0].id)))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ message: "Exam not found or you don't have permission" });
+    }
+
+    return res.json({ message: "Exam archived successfully", examId: id });
+  } catch (err) {
+    console.error("Error archiving exam:", err);
+    return res.status(500).json({ message: "Failed to archive exam", error: String(err) });
+  }
+});
+
 // Get all exam bodies
 router.get("/exam-bodies", async (_req: Request, res: Response) => {
   try {

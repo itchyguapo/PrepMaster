@@ -83,7 +83,7 @@ router.get("/subscription", async (req: Request, res: Response) => {
     const canAccessTutorMode = user.role === "tutor";
 
     return res.json({
-      status: isActive && (plan === "standard" || plan === "premium") ? "premium" : "basic",
+      status: isActive && (plan === "standard" || plan === "premium") ? "premium" : (isActive ? "basic" : "unpaid"),
       plan,
       isActive,
       canAccessExams,

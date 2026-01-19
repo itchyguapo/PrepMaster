@@ -56,6 +56,8 @@ function Router() {
       <Route path="/signup" component={Signup} />
       <Route path="/email-confirmation" component={EmailConfirmation} />
       <Route path="/payment/callback" component={PaymentCallback} />
+      <Route path="/payment/callback/" component={PaymentCallback} />
+      <Route path="/payment-callback" component={PaymentCallback} />
       <Route path="/dashboard">
         {() => (
           <StudentRouteGuard>

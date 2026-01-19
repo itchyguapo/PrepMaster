@@ -1,7 +1,8 @@
 import { db } from "../db";
 import { exams, users, subscriptions } from "@shared/schema";
-import { eq, and, lte, lt, inArray, sql } from "drizzle-orm";
+import { eq, and, lte, lt, inArray, sql, gte } from "drizzle-orm";
 import { TIER_LIMITS } from "./ExamLimitService";
+import { EmailService } from "./EmailService";
 
 export class CleanupService {
     /**
@@ -165,9 +166,51 @@ export class CleanupService {
         const now = new Date();
 
         try {
-            // Find all active subscriptions that have expired
-            const expiredSubs = await db.select()
+            // --------------------------------------------------------
+            // 1. Check for upcoming expirations (Warning: ~3 days left)
+            // --------------------------------------------------------
+            const threeDaysFromNow = new Date(now.getTime() + 72 * 60 * 60 * 1000);
+            const threeDaysPlusOneHour = new Date(threeDaysFromNow.getTime() + 60 * 60 * 1000);
+
+            // Find subscriptions expiring in the next 72-73 hours window
+            const expringSoon = await db.select({
+                subscription: subscriptions,
+                user: users
+            })
                 .from(subscriptions)
+                .innerJoin(users, eq(subscriptions.userId, users.id))
+                .where(and(
+                    eq(subscriptions.status, "active"),
+                    eq(subscriptions.isLifetime, false),
+                    // Check window: Expiring between 72h and 73h from now
+                    gte(subscriptions.expiresAt, threeDaysFromNow),
+                    lt(subscriptions.expiresAt, threeDaysPlusOneHour)
+                ));
+
+            if (expringSoon.length > 0) {
+                console.log(`[Cleanup] Found ${expringSoon.length} subscriptions expiring soon (3 days).`);
+                for (const { user, subscription } of expringSoon) {
+                    if (user.email) {
+                        try {
+                            // Import dynamically to avoid circular issues if any, or just standard import at top
+                            // But I will assume standard import.
+                            await EmailService.sendSubscriptionExpiringWarning(user.email, user.username || "Student", 3);
+                        } catch (e) {
+                            console.error(`[Cleanup] Failed to send warning to ${user.email}`, e);
+                        }
+                    }
+                }
+            }
+
+            // --------------------------------------------------------
+            // 2. Process actually expired subscriptions
+            // --------------------------------------------------------
+            const expiredSubs = await db.select({
+                subscription: subscriptions,
+                user: users
+            })
+                .from(subscriptions)
+                .innerJoin(users, eq(subscriptions.userId, users.id))
                 .where(and(
                     eq(subscriptions.status, "active"),
                     lte(subscriptions.expiresAt, now),
@@ -177,21 +220,29 @@ export class CleanupService {
             if (expiredSubs.length > 0) {
                 console.log(`[Cleanup] Found ${expiredSubs.length} expired subscriptions.`);
 
-                for (const sub of expiredSubs) {
-                    // 1. Update subscription status to expired
+                for (const { subscription, user } of expiredSubs) {
+                    // Update DB states
                     await db.update(subscriptions)
                         .set({ status: "expired", updatedAt: now })
-                        .where(eq(subscriptions.id, sub.id));
+                        .where(eq(subscriptions.id, subscription.id));
 
-                    // 2. Update user status to unpaid
                     await db.update(users)
                         .set({
                             subscriptionStatus: "unpaid",
                             updatedAt: now
                         })
-                        .where(eq(users.id, sub.userId));
+                        .where(eq(users.id, user.id));
 
-                    console.log(`[Cleanup] Expired subscription for user ID: ${sub.userId}`);
+                    console.log(`[Cleanup] Expired subscription for user ID: ${user.id}`);
+
+                    // Send notification
+                    if (user.email) {
+                        try {
+                            await EmailService.sendSubscriptionExpiredNotice(user.email, user.username || "Student");
+                        } catch (e) {
+                            console.error(`[Cleanup] Failed to send expiration notice to ${user.email}`, e);
+                        }
+                    }
                 }
             }
         } catch (error) {

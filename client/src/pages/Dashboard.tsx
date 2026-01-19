@@ -799,6 +799,52 @@ export default function Dashboard() {
     return userData?.canDownloadOffline || false;
   };
 
+  // Delete/Archive an exam
+  const handleDeleteExam = async (examId: string) => {
+    if (!online) {
+      toast({
+        title: "Offline",
+        description: "Please connect to the internet to delete an exam.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!confirm("Are you sure you want to delete this exam? This will free up one of your active exam slots.")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/exams/${examId}?supabaseId=${supabaseUser?.id}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        toast({
+          title: "Exam Deleted",
+          description: "Active exam slot has been freed up.",
+        });
+        // Remove from local state
+        setExams((prev) => prev.filter((e) => e.id !== examId));
+        // Refresh usage data
+        void fetchUsage();
+      } else {
+        const error = await res.json();
+        toast({
+          title: "Error",
+          description: error.message || "Failed to delete exam.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to connect to the server.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Start exam
   const handleStartExam = async (exam: ExamMeta) => {
     // Note: All plans can start exams, but Basic has daily limit enforced in backend
@@ -1571,6 +1617,17 @@ export default function Dashboard() {
                                     </>
                                   )}
                                 </Button>
+                                {online && (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleDeleteExam(exam.id)}
+                                    className="h-10 w-10 rounded-xl border-border/60 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50 transition-all"
+                                    title="Delete/Archive exam"
+                                  >
+                                    <XCircle className="h-4 w-4" />
+                                  </Button>
+                                )}
                                 {online && !isDownloaded && (
                                   <Button
                                     variant="outline"
@@ -1677,6 +1734,17 @@ export default function Dashboard() {
                                     </>
                                   )}
                                 </Button>
+                                {online && (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleDeleteExam(exam.id)}
+                                    className="h-10 w-10 rounded-xl border-border/60 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50 transition-all"
+                                    title="Delete/Archive exam"
+                                  >
+                                    <XCircle className="h-4 w-4" />
+                                  </Button>
+                                )}
                                 {online && !isDownloaded && (
                                   <Button
                                     variant="outline"

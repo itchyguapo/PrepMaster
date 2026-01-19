@@ -66,8 +66,11 @@ router.post("/initialize", paymentLimiter, async (req: Request, res: Response) =
     const amountInKobo = amount * 100; // Convert NGN to kobo
 
     // Initialize Paystack transaction
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
     const callbackUrl = `${frontendUrl}/payment/callback`;
+
+    console.log(`[PAYMENT] Initializing for user ${user.email}`);
+    console.log(`[PAYMENT] Callback URL: ${callbackUrl}`);
 
     const paystackResponse = await initializeTransaction({
       email: user.email,
@@ -245,11 +248,10 @@ router.get("/verify/:reference", async (req: Request, res: Response) => {
     }
 
     // Update user subscription status
-    const subscriptionStatus = (payment.plan === "standard" || payment.plan === "premium") ? "premium" : "basic";
     await db
       .update(users)
       .set({
-        subscriptionStatus,
+        subscriptionStatus: payment.plan as any,
         subscriptionExpiresAt: expiresAt,
         updatedAt: new Date(),
       })
