@@ -1768,45 +1768,71 @@ router.put("/users/:id", requireAdmin, async (req: Request, res: Response) => {
       updates.role = role;
     }
 
-    // Handle plan and status mapping
-    // subscriptionStatus from frontend is "active" or "inactive"
-    if (subscriptionStatus === 'active' || (plan && plan !== 'basic' && plan !== 'N/A')) {
-      const activePlan = (plan && plan !== 'N/A') ? plan : (userRecords[0].subscriptionStatus || 'standard');
-      const finalPlan = (activePlan === 'unpaid' || activePlan === 'expired' || activePlan === 'basic') ? 'standard' : activePlan;
+    // Handle plan and status mapping strictly
+    if (plan && ["basic", "standard", "premium"].includes(plan)) {
+      updates.subscriptionStatus = plan;
 
-      updates.subscriptionStatus = finalPlan;
+      if (subscriptionStatus === 'active') {
+        // Extend/Set expiry to 30 days from now
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30);
+        updates.subscriptionExpiresAt = expiresAt;
 
-      // Update/Extend expiry by 30 days
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 30);
-      updates.subscriptionExpiresAt = expiresAt;
+        // Upsert subscription table entry
+        const existingSubs = await db.select().from(subscriptions)
+          .where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')))
+          .orderBy(desc(subscriptions.createdAt));
 
-      // Upsert subscription table entry
-      const existingSubs = await db.select().from(subscriptions)
-        .where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')))
-        .orderBy(desc(subscriptions.createdAt));
-
-      if (existingSubs.length > 0) {
-        await db.update(subscriptions)
-          .set({ plan: finalPlan as any, expiresAt, updatedAt: new Date() })
-          .where(eq(subscriptions.id, existingSubs[0].id));
+        if (existingSubs.length > 0) {
+          await db.update(subscriptions)
+            .set({ plan: plan as any, expiresAt, updatedAt: new Date() })
+            .where(eq(subscriptions.id, existingSubs[0].id));
+        } else {
+          await db.insert(subscriptions).values({
+            userId: id,
+            plan: plan as any,
+            status: 'active',
+            expiresAt,
+            paymentMethod: 'manual',
+            paymentType: 'subscription'
+          });
+        }
       } else {
+        // Set as expired/cancelled
+        updates.subscriptionExpiresAt = new Date(); // Expire now
+
+        await db.update(subscriptions)
+          .set({
+            status: (subscriptionStatus === 'cancelled' || subscriptionStatus === 'expired') ? subscriptionStatus : 'expired',
+            updatedAt: new Date()
+          })
+          .where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')));
+      }
+    } else if (subscriptionStatus) {
+      // If only status is provided (e.g. from a quick action toggle)
+      if (subscriptionStatus === 'active') {
+        const currentTier = userRecords[0].subscriptionStatus || 'basic';
+        const finalTier = (currentTier === 'unpaid' || currentTier === 'expired') ? 'basic' : currentTier;
+        updates.subscriptionStatus = finalTier;
+
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30);
+        updates.subscriptionExpiresAt = expiresAt;
+
         await db.insert(subscriptions).values({
           userId: id,
-          plan: finalPlan as any,
+          plan: finalTier as any,
           status: 'active',
           expiresAt,
           paymentMethod: 'manual',
           paymentType: 'subscription'
         });
+      } else {
+        updates.subscriptionExpiresAt = new Date();
+        await db.update(subscriptions)
+          .set({ status: 'expired', updatedAt: new Date() })
+          .where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')));
       }
-    } else if (subscriptionStatus === 'inactive' || plan === 'basic') {
-      updates.subscriptionStatus = plan === 'basic' ? 'basic' : 'expired';
-      updates.subscriptionExpiresAt = new Date(); // Expire now
-
-      await db.update(subscriptions)
-        .set({ status: 'expired', updatedAt: new Date() })
-        .where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')));
     }
 
     await db.update(users).set(updates).where(eq(users.id, id));
@@ -1840,28 +1866,44 @@ router.post("/users/bulk-update", requireAdmin, async (req: Request, res: Respon
         const updates: any = { updatedAt: new Date() };
         if (role && ["student", "tutor", "admin"].includes(role)) updates.role = role;
 
-        if (subscriptionStatus === 'active' || (plan && plan !== 'basic' && plan !== 'N/A')) {
-          const activePlan = (plan && plan !== 'N/A') ? plan : (userRecords[0].subscriptionStatus || 'standard');
-          const finalPlan = (activePlan === 'unpaid' || activePlan === 'expired' || activePlan === 'basic') ? 'standard' : activePlan;
+        // Handle plan and status mapping strictly
+        if (plan && ["basic", "standard", "premium"].includes(plan)) {
+          updates.subscriptionStatus = plan;
 
-          updates.subscriptionStatus = finalPlan;
-          const expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + 30);
-          updates.subscriptionExpiresAt = expiresAt;
+          if (subscriptionStatus === 'active') {
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 30);
+            updates.subscriptionExpiresAt = expiresAt;
 
-          const existingSubs = await db.select().from(subscriptions)
-            .where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')))
-            .orderBy(desc(subscriptions.createdAt));
+            const existingSubs = await db.select().from(subscriptions)
+              .where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')))
+              .orderBy(desc(subscriptions.createdAt));
 
-          if (existingSubs.length > 0) {
-            await db.update(subscriptions).set({ plan: finalPlan as any, expiresAt, updatedAt: new Date() }).where(eq(subscriptions.id, existingSubs[0].id));
-          } else {
-            await db.insert(subscriptions).values({ userId: id, plan: finalPlan as any, status: 'active', expiresAt, paymentMethod: 'manual', paymentType: 'subscription' });
+            if (existingSubs.length > 0) {
+              await db.update(subscriptions).set({ plan: plan as any, expiresAt, updatedAt: new Date() }).where(eq(subscriptions.id, existingSubs[0].id));
+            } else {
+              await db.insert(subscriptions).values({ userId: id, plan: plan as any, status: 'active', expiresAt, paymentMethod: 'manual', paymentType: 'subscription' });
+            }
+          } else if (subscriptionStatus) {
+            updates.subscriptionExpiresAt = new Date();
+            await db.update(subscriptions).set({
+              status: (subscriptionStatus === 'cancelled' || subscriptionStatus === 'expired') ? subscriptionStatus : 'expired',
+              updatedAt: new Date()
+            }).where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')));
           }
-        } else if (subscriptionStatus === 'inactive' || plan === 'basic') {
-          updates.subscriptionStatus = plan === 'basic' ? 'basic' : 'expired';
-          updates.subscriptionExpiresAt = new Date();
-          await db.update(subscriptions).set({ status: 'expired', updatedAt: new Date() }).where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')));
+        } else if (subscriptionStatus) {
+          if (subscriptionStatus === 'active') {
+            const currentTier = userRecords[0].subscriptionStatus || 'basic';
+            const finalTier = (currentTier === 'unpaid' || currentTier === 'expired') ? 'basic' : currentTier;
+            updates.subscriptionStatus = finalTier;
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 30);
+            updates.subscriptionExpiresAt = expiresAt;
+            await db.insert(subscriptions).values({ userId: id, plan: finalTier as any, status: 'active', expiresAt, paymentMethod: 'manual', paymentType: 'subscription' });
+          } else {
+            updates.subscriptionExpiresAt = new Date();
+            await db.update(subscriptions).set({ status: 'expired', updatedAt: new Date() }).where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')));
+          }
         }
 
         await db.update(users).set(updates).where(eq(users.id, id));
