@@ -1472,7 +1472,7 @@ router.get("/stats", async (_req: Request, res: Response) => {
       tutorsChange: Math.round(tutorsChange * 100) / 100,
       subscriptionGrowth,
       recentActivity: recentActivity.map(activity => ({
-        user: activity.user || activity.type,
+        user: activity.type,
         action: activity.description,
         time: activity.timestamp.toISOString(),
       })),

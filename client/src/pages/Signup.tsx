@@ -72,6 +72,9 @@ export default function Signup() {
           localStorage.setItem("pendingPlan", plan);
         }
 
+        // Store email so EmailConfirmation knows a signup is pending
+        localStorage.setItem("pendingSignupEmail", email);
+
         // Account created successfully - redirect to email confirmation
         setSuccess(true);
         setTimeout(() => {

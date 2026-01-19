@@ -9,18 +9,23 @@ import { Loader2, Mail, CheckCircle2, XCircle, ArrowLeft } from "lucide-react";
 
 export default function EmailConfirmation() {
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<string | null>(null);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
-  // Check for pending plan on mount
+  // Check for pending plan and email on mount
   useEffect(() => {
     const plan = localStorage.getItem("pendingPlan");
     if (plan) {
       setPendingPlan(plan);
+    }
+    const email = localStorage.getItem("pendingSignupEmail");
+    if (email) {
+      setPendingEmail(email);
     }
   }, []);
 
@@ -41,8 +46,20 @@ export default function EmailConfirmation() {
 
   useEffect(() => {
     const checkEmailConfirmation = async () => {
+      // Wait for auth to finish loading
+      if (authLoading) {
+        return;
+      }
+
+      // If not logged in, check if user just signed up (pending confirmation)
       if (!user) {
-        setLocation("/login");
+        const storedEmail = localStorage.getItem("pendingSignupEmail");
+        if (!storedEmail) {
+          setLocation("/login");
+          return;
+        }
+        // User just signed up - show waiting for confirmation UI
+        setLoading(false);
         return;
       }
 
@@ -51,6 +68,9 @@ export default function EmailConfirmation() {
         const { data: { user: supabaseUser } } = await supabase.auth.getUser();
 
         if (supabaseUser?.email_confirmed_at) {
+          // Clean up localStorage
+          localStorage.removeItem("pendingSignupEmail");
+
           // Update our database
           await fetch("/api/auth/confirm-email", {
             method: "POST",
@@ -75,6 +95,9 @@ export default function EmailConfirmation() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === "SIGNED_IN" && session?.user?.email_confirmed_at) {
+          // Clean up localStorage
+          localStorage.removeItem("pendingSignupEmail");
+
           await fetch("/api/auth/confirm-email", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -88,7 +111,7 @@ export default function EmailConfirmation() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [user, setLocation]);
+  }, [user, authLoading, setLocation]);
 
   const handleResendEmail = async () => {
     if (!user?.email) return;
@@ -198,7 +221,7 @@ export default function EmailConfirmation() {
           </div>
           <CardTitle className="text-2xl font-bold text-center">Confirm Your Email</CardTitle>
           <CardDescription className="text-center">
-            We've sent a confirmation email to <strong>{user?.email}</strong>
+            We've sent a confirmation email to <strong>{user?.email || pendingEmail}</strong>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
