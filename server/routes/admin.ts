@@ -1744,67 +1744,13 @@ router.put("/tutor-inquiries/:id", async (req: Request, res: Response) => {
   }
 });
 
-// Users management
-router.get("/users", async (_req: Request, res: Response) => {
-  try {
-    const userRecords = await db
-      .select()
-      .from(users)
-      .orderBy(desc(users.createdAt));
+// Users management removed from here and moved to combined route below
 
-    const usersWithSubscriptions = await Promise.all(
-      userRecords.map(async (u) => {
-        const subRecords = await db
-          .select()
-          .from(subscriptions)
-          .where(
-            and(
-              eq(subscriptions.userId, u.id),
-              eq(subscriptions.status, "active"),
-              or(
-                isNull(subscriptions.expiresAt),
-                gt(subscriptions.expiresAt, new Date())
-              )
-            )
-          )
-          .orderBy(desc(subscriptions.createdAt))
-          .limit(1);
-
-        const subscription = subRecords[0];
-        const plan = subscription?.plan || "basic";
-        const status = subscription?.status || "inactive";
-
-        const roleDisplay = u.role === "admin" ? "Admin" : u.role === "tutor" ? "Tutor" : "Student";
-        const planDisplay = plan === "basic" ? "Basic" : plan === "standard" ? "Standard" : plan === "premium" ? "Premium" : plan;
-
-        return {
-          id: u.id,
-          name: u.username,
-          email: u.email || "Not set",
-          role: roleDisplay,
-          roleValue: u.role || "student",
-          plan: planDisplay,
-          planValue: plan,
-          status: status === "active" ? "Active" : "Inactive",
-          joined: new Date(u.createdAt || new Date()).toLocaleDateString(),
-        };
-      })
-    );
-
-    return res.json(usersWithSubscriptions);
-  } catch (err: any) {
-    console.error("Error fetching users:", err);
-    return res.status(500).json({
-      message: "Failed to fetch users",
-      error: err.message || String(err)
-    });
-  }
-});
-
-router.put("/users/:id", async (req: Request, res: Response) => {
+router.put("/users/:id", requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { role, plan, subscriptionStatus } = req.body;
+    const adminUser = (req as any).adminUser;
 
     const userRecords = await db
       .select()
@@ -1816,54 +1762,121 @@ router.put("/users/:id", async (req: Request, res: Response) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const user = userRecords[0];
     const updates: any = { updatedAt: new Date() };
 
     if (role && ["student", "tutor", "admin"].includes(role)) {
       updates.role = role;
     }
 
-    await db
-      .update(users)
-      .set(updates)
-      .where(eq(users.id, id));
+    // Handle plan and status mapping
+    // subscriptionStatus from frontend is "active" or "inactive"
+    if (subscriptionStatus === 'active' || (plan && plan !== 'basic' && plan !== 'N/A')) {
+      const activePlan = (plan && plan !== 'N/A') ? plan : (userRecords[0].subscriptionStatus || 'standard');
+      const finalPlan = (activePlan === 'unpaid' || activePlan === 'expired' || activePlan === 'basic') ? 'standard' : activePlan;
 
-    // Handle subscription updates if provided
-    if (plan || subscriptionStatus) {
-      const subRecords = await db
-        .select()
-        .from(subscriptions)
-        .where(
-          and(
-            eq(subscriptions.userId, id),
-            eq(subscriptions.status, "active")
-          )
-        )
-        .orderBy(desc(subscriptions.createdAt))
-        .limit(1);
+      updates.subscriptionStatus = finalPlan;
 
-      if (subRecords.length > 0) {
-        const subUpdates: any = { updatedAt: new Date() };
-        if (plan && ["basic", "standard", "premium"].includes(plan)) {
-          subUpdates.plan = plan;
-        }
-        if (subscriptionStatus === "cancelled" || subscriptionStatus === "expired") {
-          subUpdates.status = subscriptionStatus;
-        }
-        await db
-          .update(subscriptions)
-          .set(subUpdates)
-          .where(eq(subscriptions.id, subRecords[0].id));
+      // Update/Extend expiry by 30 days
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      updates.subscriptionExpiresAt = expiresAt;
+
+      // Upsert subscription table entry
+      const existingSubs = await db.select().from(subscriptions)
+        .where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')))
+        .orderBy(desc(subscriptions.createdAt));
+
+      if (existingSubs.length > 0) {
+        await db.update(subscriptions)
+          .set({ plan: finalPlan as any, expiresAt, updatedAt: new Date() })
+          .where(eq(subscriptions.id, existingSubs[0].id));
+      } else {
+        await db.insert(subscriptions).values({
+          userId: id,
+          plan: finalPlan as any,
+          status: 'active',
+          expiresAt,
+          paymentMethod: 'manual',
+          paymentType: 'subscription'
+        });
       }
+    } else if (subscriptionStatus === 'inactive' || plan === 'basic') {
+      updates.subscriptionStatus = plan === 'basic' ? 'basic' : 'expired';
+      updates.subscriptionExpiresAt = new Date(); // Expire now
+
+      await db.update(subscriptions)
+        .set({ status: 'expired', updatedAt: new Date() })
+        .where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')));
     }
+
+    await db.update(users).set(updates).where(eq(users.id, id));
+
+    // Log the activity
+    await logActivity(adminUser.id, "USER_UPDATE", `Updated user ${id} (${userRecords[0].email}): role=${role}, plan=${plan}, status=${subscriptionStatus}`, "admin");
 
     return res.json({ message: "User updated successfully" });
   } catch (err: any) {
     console.error("Error updating user:", err);
-    return res.status(500).json({
-      message: "Failed to update user",
-      error: err.message || String(err)
-    });
+    return res.status(500).json({ message: "Failed to update user", error: err.message || String(err) });
+  }
+});
+
+// Bulk update users
+router.post("/users/bulk-update", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { userIds, role, plan, subscriptionStatus } = req.body;
+    const adminUser = (req as any).adminUser;
+
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ message: "userIds array is required" });
+    }
+
+    let successCount = 0;
+    for (const id of userIds) {
+      try {
+        const userRecords = await db.select().from(users).where(eq(users.id, id)).limit(1);
+        if (userRecords.length === 0) continue;
+
+        const updates: any = { updatedAt: new Date() };
+        if (role && ["student", "tutor", "admin"].includes(role)) updates.role = role;
+
+        if (subscriptionStatus === 'active' || (plan && plan !== 'basic' && plan !== 'N/A')) {
+          const activePlan = (plan && plan !== 'N/A') ? plan : (userRecords[0].subscriptionStatus || 'standard');
+          const finalPlan = (activePlan === 'unpaid' || activePlan === 'expired' || activePlan === 'basic') ? 'standard' : activePlan;
+
+          updates.subscriptionStatus = finalPlan;
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 30);
+          updates.subscriptionExpiresAt = expiresAt;
+
+          const existingSubs = await db.select().from(subscriptions)
+            .where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')))
+            .orderBy(desc(subscriptions.createdAt));
+
+          if (existingSubs.length > 0) {
+            await db.update(subscriptions).set({ plan: finalPlan as any, expiresAt, updatedAt: new Date() }).where(eq(subscriptions.id, existingSubs[0].id));
+          } else {
+            await db.insert(subscriptions).values({ userId: id, plan: finalPlan as any, status: 'active', expiresAt, paymentMethod: 'manual', paymentType: 'subscription' });
+          }
+        } else if (subscriptionStatus === 'inactive' || plan === 'basic') {
+          updates.subscriptionStatus = plan === 'basic' ? 'basic' : 'expired';
+          updates.subscriptionExpiresAt = new Date();
+          await db.update(subscriptions).set({ status: 'expired', updatedAt: new Date() }).where(and(eq(subscriptions.userId, id), eq(subscriptions.status, 'active')));
+        }
+
+        await db.update(users).set(updates).where(eq(users.id, id));
+        successCount++;
+      } catch (err) {
+        console.error(`Error updating user ${id} in bulk:`, err);
+      }
+    }
+
+    await logActivity(adminUser.id, "USER_BULK_UPDATE", `Bulk updated ${successCount} users: role=${role}, plan=${plan}, status=${subscriptionStatus}`, "admin");
+
+    return res.json({ message: `Successfully updated ${successCount} users` });
+  } catch (err: any) {
+    console.error("Error bulk updating users:", err);
+    return res.status(500).json({ message: "Failed to bulk update users", error: err.message || String(err) });
   }
 });
 
@@ -4447,28 +4460,62 @@ router.delete("/users/test-users", requireAdmin, async (req: Request, res: Respo
   }
 });
 
-// Get all users with ban status (for admin user management)
-router.get("/users", requireAdmin, async (req: Request, res: Response) => {
+// Combined users route with subscription details and ban status
+router.get("/users", requireAdmin, async (_req: Request, res: Response) => {
   try {
-    const allUsers = await db
-      .select({
-        id: users.id,
-        username: users.username,
-        email: users.email,
-        role: users.role,
-        subscriptionStatus: users.subscriptionStatus,
-        isBanned: users.isBanned,
-        bannedAt: users.bannedAt,
-        bannedReason: users.bannedReason,
-        createdAt: users.createdAt
-      })
+    const userRecords = await db
+      .select()
       .from(users)
       .orderBy(desc(users.createdAt));
 
-    return res.json(allUsers);
+    const usersWithSubscriptions = await Promise.all(
+      userRecords.map(async (u) => {
+        const subRecords = await db
+          .select()
+          .from(subscriptions)
+          .where(
+            and(
+              eq(subscriptions.userId, u.id),
+              eq(subscriptions.status, "active"),
+              or(
+                isNull(subscriptions.expiresAt),
+                gt(subscriptions.expiresAt, new Date())
+              )
+            )
+          )
+          .orderBy(desc(subscriptions.createdAt))
+          .limit(1);
+
+        const subscription = subRecords[0];
+        const plan = subscription?.plan || "basic";
+        const status = subscription?.status || "inactive";
+
+        const roleDisplay = u.role === "admin" ? "Admin" : u.role === "tutor" ? "Tutor" : "Student";
+        const planDisplay = plan === "basic" ? "Basic" : plan === "standard" ? "Standard" : plan === "premium" ? "Premium" : plan;
+
+        return {
+          id: u.id,
+          name: u.username || "Unknown",
+          email: u.email || "Not set",
+          role: roleDisplay,
+          roleValue: u.role || "student",
+          plan: planDisplay,
+          planValue: plan,
+          status: u.isBanned ? "Banned" : (status === "active" ? "Active" : "Inactive"),
+          joined: new Date(u.createdAt || new Date()).toLocaleDateString(),
+          isBanned: u.isBanned,
+          subscriptionStatus: u.subscriptionStatus
+        };
+      })
+    );
+
+    return res.json(usersWithSubscriptions);
   } catch (err: any) {
     console.error("Error fetching users:", err);
-    return res.status(500).json({ message: "Failed to fetch users", error: err.message || String(err) });
+    return res.status(500).json({
+      message: "Failed to fetch users",
+      error: err.message || String(err)
+    });
   }
 });
 

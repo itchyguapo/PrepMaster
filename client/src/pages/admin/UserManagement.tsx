@@ -149,13 +149,39 @@ export default function UserManagement() {
     }
   };
 
-  const handleStatusChange = (userId: string | number, newStatus: string) => {
-    setUsers(users.map(u => u.id === userId ? { ...u, status: newStatus } : u));
-    toast({
-      title: "User Status Updated",
-      description: `User has been marked as ${newStatus}.`,
-    });
-    // Note: In production, you'd make an API call here to update the user status
+  const handleStatusChange = async (userId: string | number, newStatus: string) => {
+    try {
+      const res = await adminFetch(`/api/admin/users/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subscriptionStatus: newStatus.toLowerCase() === 'active' ? 'active' : 'inactive'
+        }),
+      });
+
+      if (res.ok) {
+        toast({
+          title: "User Status Updated",
+          description: `User has been marked as ${newStatus}.`,
+        });
+
+        // Refresh users list
+        const usersRes = await adminFetch("/api/admin/users");
+        if (usersRes.ok) {
+          const data = await usersRes.json();
+          setUsers(data);
+        }
+      } else {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to update status");
+      }
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to update user status.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDeleteUser = async (user: User) => {
